@@ -48,22 +48,30 @@ SoundCloud, YouTube Music, Yandex Music and local files in one library.
   </tr>
   <tr>
     <td><img src="docs/screens/desktop/search.png" alt="Search" /></td>
-    <td><img src="docs/screens/desktop/lyrics.png" alt="Lyrics" /></td>
+    <td><img src="docs/screens/desktop/liked.png" alt="Liked tracks" /></td>
   </tr>
   <tr>
-    <td><img src="docs/screens/desktop/liked.png" alt="Liked tracks" /></td>
+    <td><img src="docs/screens/desktop/sound.png" alt="Sound and equalizer" /></td>
+    <td><img src="docs/screens/desktop/queue.png" alt="Queue" /></td>
+  </tr>
+  <tr>
     <td><img src="docs/screens/desktop/settings.png" alt="Settings" /></td>
+    <td><img src="docs/screens/desktop/appearance.png" alt="Colours" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screens/desktop/plugins.png" alt="Plugin catalog" /></td>
+    <td><img src="docs/screens/desktop/player.png" alt="Player with lyrics" /></td>
   </tr>
 </table>
 
-### Phone
+### Android
 
 <p align="center">
-  <img src="docs/screens/mobile/m1.jpg" alt="Phone 1" width="18%" />
-  <img src="docs/screens/mobile/m2.jpg" alt="Phone 2" width="18%" />
-  <img src="docs/screens/mobile/m3.jpg" alt="Phone 3" width="18%" />
-  <img src="docs/screens/mobile/m4.jpg" alt="Phone 4" width="18%" />
-  <img src="docs/screens/mobile/m5.jpg" alt="Phone 5" width="18%" />
+  <img src="docs/screens/mobile/m1.jpg" alt="Android 1" width="18%" />
+  <img src="docs/screens/mobile/m2.jpg" alt="Android 2" width="18%" />
+  <img src="docs/screens/mobile/m3.jpg" alt="Android 3" width="18%" />
+  <img src="docs/screens/mobile/m4.jpg" alt="Android 4" width="18%" />
+  <img src="docs/screens/mobile/m5.jpg" alt="Android 5" width="18%" />
 </p>
 
 ## Install

@@ -48,22 +48,30 @@ SoundCloud, YouTube Music, Яндекс Музыка и локальные фа�
   </tr>
   <tr>
     <td><img src="docs/screens/desktop/search.png" alt="Поиск" /></td>
-    <td><img src="docs/screens/desktop/lyrics.png" alt="Тексты песен" /></td>
+    <td><img src="docs/screens/desktop/liked.png" alt="Мне нравится" /></td>
   </tr>
   <tr>
-    <td><img src="docs/screens/desktop/liked.png" alt="Мне нравится" /></td>
+    <td><img src="docs/screens/desktop/sound.png" alt="Звук и эквалайзер" /></td>
+    <td><img src="docs/screens/desktop/queue.png" alt="Очередь" /></td>
+  </tr>
+  <tr>
     <td><img src="docs/screens/desktop/settings.png" alt="Настройки" /></td>
+    <td><img src="docs/screens/desktop/appearance.png" alt="Цвета" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screens/desktop/plugins.png" alt="Каталог плагинов" /></td>
+    <td><img src="docs/screens/desktop/player.png" alt="Плеер с текстами" /></td>
   </tr>
 </table>
 
-### Телефон
+### Android
 
 <p align="center">
-  <img src="docs/screens/mobile/m1.jpg" alt="Телефон 1" width="18%" />
-  <img src="docs/screens/mobile/m2.jpg" alt="Телефон 2" width="18%" />
-  <img src="docs/screens/mobile/m3.jpg" alt="Телефон 3" width="18%" />
-  <img src="docs/screens/mobile/m4.jpg" alt="Телефон 4" width="18%" />
-  <img src="docs/screens/mobile/m5.jpg" alt="Телефон 5" width="18%" />
+  <img src="docs/screens/mobile/m1.jpg" alt="Android 1" width="18%" />
+  <img src="docs/screens/mobile/m2.jpg" alt="Android 2" width="18%" />
+  <img src="docs/screens/mobile/m3.jpg" alt="Android 3" width="18%" />
+  <img src="docs/screens/mobile/m4.jpg" alt="Android 4" width="18%" />
+  <img src="docs/screens/mobile/m5.jpg" alt="Android 5" width="18%" />
 </p>
 
 ## Установка
