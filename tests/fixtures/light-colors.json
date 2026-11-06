@@ -1,0 +1,9 @@
+{
+  "version": 1, "name": "Linen", "scheme": "light",
+  "palette": {
+    "mainBg": "#f6f2ea", "barBg": "#eee6d9f0", "cardBg": "#eee7dc", "cardHover": "#e5dac9",
+    "border": "#a999844f", "borderLight": "#7e6b55", "accent": "#c4501f", "text": "#23201b",
+    "textMuted": "#635243", "textOnAccent": "#ffffff", "accentMutedText": "#8c3516",
+    "danger": "#a72e25", "warning": "#76540d", "success": "#3c632b", "bgOverlay": "#23201bcc"
+  }
+}

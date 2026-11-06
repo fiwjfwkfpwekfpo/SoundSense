@@ -1,0 +1,22 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createLibrary } from '../../src/mock/library';
+import { createPlayer } from '../../src/mock/player';
+import type { PlayerApi } from '../../src/core/api';
+describe('mock player', () => {
+  let player: PlayerApi;
+  beforeEach(() => { vi.useFakeTimers(); player = createPlayer(createLibrary()); });
+  afterEach(() => { player.dispose(); vi.useRealTimers(); });
+  it('advances only while playing', () => { const start = player.getSnapshot().position; vi.advanceTimersByTime(1000); expect(player.getSnapshot().position).toBe(start); player.toggle(); vi.advanceTimersByTime(2000); expect(player.getSnapshot().position).toBeCloseTo(start + 2, 5); player.toggle(); vi.advanceTimersByTime(2000); expect(player.getSnapshot().position).toBeCloseTo(start + 2, 5); });
+  it('seeks and clamps invalid positions', () => { player.seek(9999); expect(player.getSnapshot().position).toBe(143); player.seek(NaN); expect(player.getSnapshot().position).toBe(0); player.seek(-9); expect(player.getSnapshot().position).toBe(0); });
+  it('moves through queue and restarts the current song', () => { player.next(); expect(player.getSnapshot().trackId).toBe('track-2'); player.seek(20); player.previous(); expect(player.getSnapshot().trackId).toBe('track-2'); expect(player.getSnapshot().position).toBe(0); player.previous(); expect(player.getSnapshot().trackId).toBe('track-1'); });
+  it('moves to the next song automatically', () => { player.play(['track-1', 'track-2']); player.seek(142.5); vi.advanceTimersByTime(1000); expect(player.getSnapshot().trackId).toBe('track-2'); expect(player.getSnapshot().playing).toBe(true); });
+  it('cycles all three repeat modes and repeats one song', () => { player.play(['track-1']); player.cycleRepeat(); expect(player.getSnapshot().repeat).toBe('all'); player.cycleRepeat(); expect(player.getSnapshot().repeat).toBe('one'); player.seek(142.5); vi.advanceTimersByTime(1000); expect(player.getSnapshot().trackId).toBe('track-1'); expect(player.getSnapshot().playing).toBe(true); player.cycleRepeat(); expect(player.getSnapshot().repeat).toBe('off'); });
+  it('wraps the queue in repeat-all mode', () => { player.play(['track-1', 'track-2']); player.cycleRepeat(); player.next(); player.next(); expect(player.getSnapshot().trackId).toBe('track-1'); });
+  it('stops at the end without repeat', () => { player.play(['track-1']); player.seek(142.5); vi.advanceTimersByTime(1000); expect(player.getSnapshot().playing).toBe(false); player.toggle(); expect(player.getSnapshot().position).toBe(0); });
+  it('supports duplicate songs as separate queue entries', () => { player.enqueue('track-1', true); const queue = player.getSnapshot().queue; expect(queue[1]?.trackId).toBe('track-1'); expect(queue[1]?.id).not.toBe(queue[0]?.id); player.remove(queue[1]!.id); expect(player.getSnapshot().trackId).toBe('track-1'); });
+  it('keeps current song and position when reordering', () => { const state = player.getSnapshot(); player.move(state.queue[0]!.id, 3); expect(player.getSnapshot().currentIndex).toBe(3); expect(player.getSnapshot().position).toBe(67); expect(player.getSnapshot().trackId).toBe('track-1'); });
+  it('handles removing the active song and clearing all entries', () => { for (const entry of [...player.getSnapshot().queue]) player.remove(entry.id); expect(player.getSnapshot().trackId).toBeNull(); expect(player.getSnapshot().playing).toBe(false); player.enqueue('track-2'); expect(player.getSnapshot().trackId).toBe('track-2'); });
+  it('shuffles upcoming songs and restores their order', () => { const queue = player.getSnapshot().queue; player.setShuffle(true); expect(player.getSnapshot().shuffle).toBe(true); expect(player.getSnapshot().queue[0]?.id).toBe(queue[0]?.id); player.setShuffle(false); expect(player.getSnapshot().queue).toEqual(queue); });
+  it('swipe previous selects a song even after playback has advanced', () => { player.next(); player.seek(30); player.previous(false); expect(player.getSnapshot().trackId).toBe('track-1'); expect(player.getSnapshot().playing).toBe(false); });
+  it('clears only upcoming songs', () => { player.clearUpcoming(); expect(player.getSnapshot().queue).toHaveLength(1); expect(player.getSnapshot().trackId).toBe('track-1'); });
+});

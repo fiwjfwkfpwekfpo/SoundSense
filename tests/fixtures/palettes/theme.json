@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "skin": "material",
+  "layout": "current",
+  "palette": {
+    "bgOverlay": "#E6050709",
+    "mainBg": "#D807090D",
+    "barBg": "#D807090D",
+    "cardBg": "#0D1016",
+    "cardHover": "#161A22",
+    "border": "#232935",
+    "borderLight": "#3A4250",
+    "accent": "#C9D1DE",
+    "text": "#E3E6EB",
+    "textMuted": "#8A93A2",
+    "textOnAccent": "#07090D",
+    "accentMutedText": "#AAB4C4",
+    "danger": "#C76B6F",
+    "warning": "#C7AE7B",
+    "success": "#7FA68C"
+  },
+  "tokens": {
+    "fontFamily": "sans-serif",
+    "fontBody": "sans-serif",
+    "fontDisplay": "sans-serif",
+    "fontMono": "monospace",
+    "iconFont": "JetBrainsMono Nerd Font",
+    "radiusXs": 4,
+    "radiusS": 8,
+    "radiusM": 12,
+    "radiusL": 16,
+    "radiusXl": 22,
+    "radiusFull": 9999,
+    "shadowColor": "#00000000",
+    "durFast": 100,
+    "durNormal": 150,
+    "durMedium": 210,
+    "durSlow": 280,
+    "curveStandard": [
+      0.2,
+      0,
+      0,
+      1
+    ],
+    "curveSpringGentle": [
+      0.22,
+      1,
+      0.36,
+      1
+    ],
+    "curveSpringBounce": [
+      0.22,
+      1,
+      0.36,
+      1
+    ],
+    "hoverOpacity": 0.08,
+    "pressedOpacity": 0.14,
+    "focusOpacity": 0.14,
+    "disabledOpacity": 0.45,
+    "pressedScale": 0.985,
+    "hoverScale": 1.01,
+    "borderThin": 1,
+    "borderThick": 2
+  }
+}

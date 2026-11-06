@@ -1,0 +1,17 @@
+{
+  "version": "1.4.4",
+  "ru": [
+    "Обновлён вид настроек: вкладки слева на ПК, аккуратные строки вместо больших кнопок."
+  ],
+  "en": [
+    "Updated the settings look: tabs on the left on desktop, tidy rows instead of large buttons."
+  ],
+  "channel": {
+    "ru": [
+      "Обновлён вид настроек: вкладки слева на ПК, аккуратные строки вместо больших кнопок."
+    ],
+    "en": [
+      "Updated the settings look: tabs on the left on desktop, tidy rows instead of large buttons."
+    ]
+  }
+}
