@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "name": "Пружинный",
+  "groups": {
+    "general": {
+      "effect": "scale",
+      "duration": 300,
+      "easing": "spring"
+    },
+    "player": {
+      "effect": "expand",
+      "duration": 420,
+      "easing": "spring"
+    },
+    "title": {
+      "effect": "slide-up",
+      "duration": 320,
+      "easing": "spring"
+    },
+    "cover": {
+      "effect": "zoom",
+      "duration": 380,
+      "easing": "spring"
+    },
+    "lyrics": {
+      "effect": "scale",
+      "duration": 260,
+      "easing": "spring"
+    },
+    "waveform": {
+      "effect": "sweep",
+      "duration": 360,
+      "easing": "spring",
+      "progress": "smooth"
+    }
+  }
+}

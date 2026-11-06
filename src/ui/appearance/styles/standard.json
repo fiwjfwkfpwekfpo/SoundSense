@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "name": "Стандарт",
+  "tokens": {
+    "radiusS": 10,
+    "radiusM": 16,
+    "radiusL": 24,
+    "radiusXl": 32,
+    "blurNav": 12,
+    "shadowStrength": 0.22,
+    "listDensity": 1
+  },
+  "suggest": {
+    "colors": "cover",
+    "motion": "smooth"
+  }
+}

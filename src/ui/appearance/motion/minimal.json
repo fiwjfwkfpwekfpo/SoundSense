@@ -1,0 +1,10 @@
+{
+  "version": 1, "name": "Минимум", "groups": {
+    "general": { "effect": "fade", "duration": 70, "easing": "linear" },
+    "player": { "effect": "fade", "duration": 80, "easing": "linear" },
+    "title": { "effect": "fade", "duration": 70, "easing": "linear" },
+    "cover": { "effect": "crossfade", "duration": 80, "easing": "linear" },
+    "lyrics": { "effect": "fade", "duration": 60, "easing": "linear" },
+    "waveform": { "effect": "none", "duration": 60, "easing": "linear", "progress": "smooth" }
+  }
+}

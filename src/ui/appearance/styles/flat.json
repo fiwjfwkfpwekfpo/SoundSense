@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "name": "Плоский",
+  "tokens": {
+    "radiusS": 3,
+    "radiusM": 4,
+    "radiusL": 6,
+    "radiusXl": 8,
+    "radiusFull": 10,
+    "space1": 5,
+    "space2": 10,
+    "space3": 14,
+    "space4": 18,
+    "space5": 22,
+    "space6": 26,
+    "space7": 30,
+    "space8": 34,
+    "shadowStrength": 0,
+    "blurNav": 0,
+    "blurArt": 0,
+    "borderWidth": 1,
+    "chromeBorders": 1,
+    "listDensity": 1.08
+  },
+  "suggest": {
+    "colors": "cover"
+  }
+}

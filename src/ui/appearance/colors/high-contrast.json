@@ -1,0 +1,9 @@
+{
+  "version": 1, "name": "Высокий контраст", "scheme": "dark",
+  "palette": {
+    "mainBg": "#000000", "barBg": "#000000", "cardBg": "#000000", "cardHover": "#000000",
+    "border": "#ffffff", "borderLight": "#ffffff", "accent": "#ffffff", "text": "#ffffff",
+    "textMuted": "#ffffff", "textOnAccent": "#000000", "accentMutedText": "#ffffff",
+    "danger": "#ffffff", "warning": "#ffffff", "success": "#ffffff", "bgOverlay": "#000000f2"
+  }
+}

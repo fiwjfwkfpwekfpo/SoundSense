@@ -1,0 +1,45 @@
+import { test, expect } from '@playwright/test';
+import { actualApp, importFiles } from './helpers';
+import { resolve } from 'node:path';
+const first = 'Тест локального импорта — длинное название трека';
+test('actual files: tags, deselection, invalid file, audible transport and persistence', async ({ page }) => {
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  await actualApp(page); await expect(page.getByTestId('mini-player')).toHaveCount(0); await expect(page.getByText('Моя волна', { exact: true })).toHaveCount(0);
+  await importFiles(page);
+  await expect(page.getByRole('checkbox', { name: first, exact: true })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Local FLAC test', exact: true })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'broken.mp3', exact: true })).toBeDisabled();
+  await expect(page.getByText('Выбрано 2 из 3', { exact: true })).toBeVisible();
+  await page.getByRole('checkbox', { name: 'Local FLAC test', exact: true }).uncheck();
+  await page.screenshot({ path: 'docs/screens/live/import-selection.png', fullPage: true });
+  await page.getByRole('button', { name: 'Добавить треки · 1', exact: true }).click();
+  await expect(page.getByTestId('import-result')).toContainText('Импортировано 1 из 1');
+  await page.getByTestId('import-result').getByRole('button', { name: 'Открыть результат', exact: true }).click();
+  await page.getByRole('button', { name: `Воспроизвести: ${first}, SoundSense Test`, exact: true }).click();
+  await expect(page.getByTestId('mini-player')).toContainText(first);
+  await expect.poll(() => page.evaluate(() => (window as any).__media.some((media: HTMLAudioElement) => !media.paused && media.currentTime > .5))).toBe(true);
+  await page.getByTestId('mini-player').getByRole('button', { name: 'Пауза', exact: true }).click();
+  await page.waitForTimeout(2500); await page.reload();
+  await expect(page.getByTestId('mini-player')).toContainText(first);
+  await expect(page.getByTestId('mini-player').getByRole('button', { name: 'Воспроизвести', exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+test('actual files: three-second overlap uses two real media streams and hides navigation in full player', async ({ page }) => {
+  await actualApp(page); await importFiles(page, ['one.mp3', 'two.flac']); await page.getByRole('button', { name: 'Добавить треки · 2', exact: true }).click(); await page.getByTestId('import-result').getByRole('button', { name: 'Открыть результат', exact: true }).click();
+  await page.getByRole('button', { name: `Воспроизвести: ${first}, SoundSense Test`, exact: true }).click();
+  const mini = page.getByTestId('mini-player'), box = await mini.boundingBox(); if (!box) throw new Error('Mini player missing');
+  await page.mouse.move(box.x + 80, box.y + 35); await page.mouse.down(); await page.mouse.move(box.x + 80, box.y - 30, { steps: 6 }); await page.mouse.up();
+  await expect(page.getByTestId('player')).toBeVisible(); await expect(page.getByRole('navigation')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => (window as any).__media.filter((media: HTMLAudioElement) => !media.paused).length), { timeout: 10000 }).toBe(2);
+  await expect(page.getByTestId('player')).toContainText('Local FLAC test');
+  await page.screenshot({ path: 'docs/screens/live/real-crossfade.png' });
+});
+test('real folder picker, many files and large text fit inside the phone viewport', async ({ page }) => {
+  await actualApp(page, true); await page.getByRole('button', { name: 'Импорт музыки', exact: true }).click(); await page.getByRole('button', { name: 'Файлы', exact: true }).click();
+  const picker = page.waitForEvent('filechooser'); await page.getByRole('button', { name: 'Выбрать папку', exact: true }).click(); await (await picker).setFiles(resolve('tests/fixtures/audio'));
+  await expect(page.getByTestId('local-preview')).toBeVisible();
+  await page.getByRole('searchbox', { name: 'Найти среди выбранных файлов', exact: true }).fill('FLAC');
+  await expect(page.getByTestId('local-preview').getByRole('checkbox')).toHaveCount(1);
+  const overflow = await page.evaluate(() => ({ body: document.body.scrollWidth > innerWidth, labels: [...document.querySelectorAll('.chip')].some(node => node.scrollWidth > node.clientWidth) }));
+  expect(overflow).toEqual({ body: false, labels: false }); await page.screenshot({ path: 'docs/screens/live/import-folder-130.png', fullPage: true });
+});

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "name": "Лайм",
+  "scheme": "dark",
+  "palette": {
+    "bgOverlay": "#111417b0",
+    "mainBg": "#0e1113",
+    "barBg": "#111417d8",
+    "cardBg": "#171b1e",
+    "cardHover": "#23292f",
+    "border": "#3e5c22",
+    "borderLight": "#3e5c22",
+    "accent": "#a8d545",
+    "text": "#d8ded6",
+    "textMuted": "#849381",
+    "textOnAccent": "#525252",
+    "accentMutedText": "#d4f788",
+    "danger": "#ff4d6d",
+    "warning": "#eab308",
+    "success": "#a8d545"
+  }
+}

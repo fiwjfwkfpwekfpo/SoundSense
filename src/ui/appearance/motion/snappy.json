@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "name": "Быстрый",
+  "groups": {
+    "general": {
+      "effect": "fade",
+      "duration": 110,
+      "easing": "standard"
+    },
+    "player": {
+      "effect": "slide-up",
+      "duration": 170,
+      "easing": "emphasized"
+    },
+    "title": {
+      "effect": "fade",
+      "duration": 120,
+      "easing": "standard"
+    },
+    "cover": {
+      "effect": "slide",
+      "duration": 160,
+      "easing": "standard"
+    },
+    "lyrics": {
+      "effect": "fade",
+      "duration": 120,
+      "easing": "standard"
+    },
+    "waveform": {
+      "effect": "grow",
+      "duration": 180,
+      "easing": "standard",
+      "progress": "smooth"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "name": "Серебро",
+  "scheme": "dark",
+  "palette": {
+    "bgOverlay": "#050709E6",
+    "mainBg": "#06080b",
+    "barBg": "#07090DD8",
+    "cardBg": "#0D1016",
+    "cardHover": "#161A22",
+    "border": "#232935",
+    "borderLight": "#3A4250",
+    "accent": "#C9D1DE",
+    "text": "#E3E6EB",
+    "textMuted": "#8A93A2",
+    "textOnAccent": "#07090D",
+    "accentMutedText": "#AAB4C4",
+    "danger": "#C76B6F",
+    "warning": "#C7AE7B",
+    "success": "#7FA68C"
+  }
+}

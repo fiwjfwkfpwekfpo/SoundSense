@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "name": "Ретро",
+  "tokens": {
+    "radiusS": 0,
+    "radiusM": 0,
+    "radiusL": 0,
+    "radiusXl": 0,
+    "radiusFull": 0,
+    "fontBody": "'JetBrains Mono', 'SFMono-Regular', Consolas, monospace",
+    "fontDisplay": "'JetBrains Mono', 'SFMono-Regular', Consolas, monospace",
+    "borderWidth": 1,
+    "chromeBorders": 1,
+    "blurNav": 0,
+    "blurArt": 0,
+    "shadowStrength": 0,
+    "listDensity": 0.9
+  },
+  "suggest": {
+    "colors": "lime",
+    "motion": "retro"
+  }
+}

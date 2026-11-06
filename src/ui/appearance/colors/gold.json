@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "name": "Золото",
+  "scheme": "dark",
+  "palette": {
+    "bgOverlay": "#0e0909b8",
+    "mainBg": "#120b0a",
+    "barBg": "#0e090900",
+    "cardBg": "#1a1110",
+    "cardHover": "#2a1a17",
+    "border": "#4e3326",
+    "borderLight": "#8a6a3e",
+    "accent": "#d8b061",
+    "text": "#f1e8d6",
+    "textMuted": "#a8977c",
+    "textOnAccent": "#140c0a",
+    "accentMutedText": "#e9d6a8",
+    "danger": "#e15842",
+    "warning": "#e89a3c",
+    "success": "#7cbf9a"
+  }
+}

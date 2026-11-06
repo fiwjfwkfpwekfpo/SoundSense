@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "name": "Плавный",
+  "groups": {
+    "general": {
+      "effect": "fluid",
+      "duration": 180,
+      "easing": "emphasized"
+    },
+    "player": {
+      "effect": "slide-up",
+      "duration": 280,
+      "easing": "emphasized"
+    },
+    "title": {
+      "effect": "slide-up",
+      "duration": 240,
+      "easing": "standard"
+    },
+    "cover": {
+      "effect": "stack",
+      "duration": 320,
+      "easing": "emphasized"
+    },
+    "lyrics": {
+      "effect": "fade",
+      "duration": 220,
+      "easing": "standard"
+    },
+    "waveform": {
+      "effect": "morph",
+      "duration": 360,
+      "easing": "standard",
+      "progress": "smooth"
+    }
+  }
+}

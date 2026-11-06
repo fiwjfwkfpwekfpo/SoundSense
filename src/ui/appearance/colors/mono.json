@@ -1,0 +1,9 @@
+{
+  "version": 1, "name": "Монохром", "scheme": "dark",
+  "palette": {
+    "bgOverlay": "#101010cc", "mainBg": "#101010", "barBg": "#292929de",
+    "cardBg": "#191919", "cardHover": "#242424", "border": "#ffffff20", "borderLight": "#92928f",
+    "accent": "#f4f4f2", "text": "#f4f4f2", "textMuted": "#a0a09b", "textOnAccent": "#141414",
+    "accentMutedText": "#a0a09b", "danger": "#f4f4f2", "warning": "#c8c8c3", "success": "#b8b8b2"
+  }
+}

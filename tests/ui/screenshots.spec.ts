@@ -1,0 +1,28 @@
+import { test, expect } from '@playwright/test';
+import { mkdir } from 'node:fs/promises';
+import { ready, goTab, openPlayer, chooseAppearance } from './helpers';
+test('capture every screen at 412 × 915 with safe insets', async ({ page }) => {
+  test.setTimeout(90000);
+  await mkdir('docs/screens', { recursive: true });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await ready(page);
+  const shot = async (name: string) => { await page.screenshot({ path: `docs/screens/${name}.png`, animations: 'disabled' }); };
+  await shot('01-home-dark'); await goTab(page, 'Мне нравится'); await expect(page.getByTestId('virtual-list')).toHaveAttribute('data-total', '2048'); await shot('02-liked-dark');
+  await openPlayer(page); await shot('03-player-dark'); await page.getByRole('button', { name: 'Очередь', exact: false }).click(); await shot('04-queue-dark');
+  await page.getByRole('button', { name: 'Назад', exact: true }).click(); await page.getByRole('button', { name: 'Текст песни', exact: true }).click(); await expect(page.locator('[data-line="5"]')).toHaveAttribute('aria-current', 'true'); await shot('05-lyrics-dark');
+  await goTab(page, 'Поиск'); await page.getByRole('textbox', { name: 'Поиск музыки' }).blur(); await shot('06-search-dark');
+  await page.getByRole('textbox', { name: 'Поиск музыки' }).fill('lunar'); await shot('07-search-results-dark');
+  await goTab(page, 'Главная'); await page.getByRole('button', { name: 'Плейлисты', exact: true }).click(); await shot('08-library-dark');
+  await goTab(page, 'Настройки'); await shot('09-settings-dark');
+  await chooseAppearance(page, 'Цвета', 'Светлая фикстура'); await shot('10-settings-light'); await goTab(page, 'Главная'); await shot('11-home-light');
+  await openPlayer(page); await shot('12-player-light'); await page.getByRole('button', { name: 'Меню плеера' }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Звук', exact: false }).click(); await shot('13-sound-sheet');
+  await page.getByRole('dialog').getByRole('button', { name: 'Закрыть', exact: true }).click(); await goTab(page, 'Мне нравится'); await page.getByRole('button', { name: 'Меню трека Полутона', exact: true }).click(); await shot('14-track-sheet');
+  await page.getByRole('dialog').getByRole('button', { name: 'К исполнителю', exact: true }).click(); await shot('15-artist');
+  await goTab(page, 'Главная'); await page.getByRole('button', { name: /Фон, 37 треков/ }).click(); await shot('16-playlist');
+  await goTab(page, 'Настройки'); await page.getByRole('button', { name: 'Цвета', exact: true }).click(); const backToPresets = page.getByRole('button', { name: 'К пресетам', exact: true }); if (await backToPresets.isVisible()) await backToPresets.click(); await page.getByRole('option', { name: 'Свой', exact: true }).click(); await shot('17-custom-theme');
+  await page.getByRole('dialog').getByRole('button', { name: 'Закрыть', exact: true }).click(); await openPlayer(page); await page.getByRole('button', { name: 'Следующий трек', exact: true }).click(); await page.getByRole('button', { name: 'Текст песни', exact: true }).click(); await shot('18-lyrics-empty');
+  await goTab(page, 'Мне нравится'); await goTab(page, 'Мне нравится'); await page.locator('main').evaluate(element => element.scrollTop = element.scrollHeight); await expect(page.locator('main [data-track-id="collection-2024"]')).toBeVisible(); await shot('19-playlist-end');
+  await goTab(page, 'Поиск'); await page.getByRole('textbox', { name: 'Поиск музыки' }).focus(); await expect(page.getByRole('textbox', { name: 'Поиск музыки' })).toBeFocused(); await shot('20-search-focused');
+  await goTab(page, 'Настройки'); await page.getByRole('button', { name: 'Цвета', exact: true }).click(); await shot('21-theme-chooser');
+  await page.getByRole('dialog').getByRole('button', { name: 'Закрыть', exact: true }).click(); await goTab(page, 'Главная'); await shot('22-mini-navigation');
+});

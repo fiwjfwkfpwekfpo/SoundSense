@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "name": "Компактный",
+  "tokens": {
+    "radiusS": 6,
+    "radiusM": 10,
+    "radiusL": 14,
+    "radiusXl": 20,
+    "space1": 3,
+    "space2": 6,
+    "space3": 10,
+    "space4": 13,
+    "space5": 16,
+    "space6": 20,
+    "space7": 24,
+    "space8": 28,
+    "blurNav": 0,
+    "shadowStrength": 0.12,
+    "listDensity": 0.88
+  },
+  "suggest": {
+    "colors": "cover",
+    "motion": "snappy"
+  }
+}

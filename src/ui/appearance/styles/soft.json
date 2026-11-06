@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "name": "Мягкий",
+  "tokens": {
+    "radiusS": 14,
+    "radiusM": 22,
+    "radiusL": 30,
+    "radiusXl": 40,
+    "space4": 18,
+    "space5": 22,
+    "space6": 26,
+    "blurNav": 16,
+    "shadowStrength": 0.3,
+    "borderWidth": 0,
+    "listDensity": 1.1,
+    "weightBold": 700,
+    "weightSemibold": 600
+  },
+  "suggest": {
+    "colors": "cover",
+    "motion": "spring"
+  }
+}

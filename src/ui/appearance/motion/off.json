@@ -1,0 +1,10 @@
+{
+  "version": 1, "name": "Выкл", "groups": {
+    "general": { "effect": "none", "duration": 0, "easing": "linear" },
+    "player": { "effect": "fade", "duration": 0, "easing": "linear" },
+    "title": { "effect": "none", "duration": 0, "easing": "linear" },
+    "cover": { "effect": "none", "duration": 0, "easing": "linear" },
+    "lyrics": { "effect": "none", "duration": 0, "easing": "linear" },
+    "waveform": { "effect": "none", "duration": 0, "easing": "linear", "progress": "stepped" }
+  }
+}

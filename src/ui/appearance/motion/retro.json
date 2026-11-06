@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "name": "Ретро",
+  "groups": {
+    "general": {
+      "effect": "crt",
+      "duration": 320,
+      "easing": "steps(6)"
+    },
+    "player": {
+      "effect": "fade",
+      "duration": 0,
+      "easing": "steps(6)"
+    },
+    "title": {
+      "effect": "split-flap",
+      "duration": 520,
+      "easing": "steps(10)"
+    },
+    "cover": {
+      "effect": "slide",
+      "duration": 180,
+      "easing": "steps(6)"
+    },
+    "lyrics": {
+      "effect": "fill",
+      "duration": 240,
+      "easing": "steps(8)"
+    },
+    "waveform": {
+      "effect": "none",
+      "duration": 120,
+      "easing": "steps(6)",
+      "progress": "stepped"
+    }
+  }
+}

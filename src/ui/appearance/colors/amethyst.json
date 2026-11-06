@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "name": "Аметист",
+  "scheme": "dark",
+  "palette": {
+    "bgOverlay": "#090810B8",
+    "mainBg": "#0D0D13",
+    "barBg": "#111019E8",
+    "cardBg": "#17151F",
+    "cardHover": "#24202F",
+    "border": "#302A3D",
+    "borderLight": "#41374F",
+    "accent": "#A78BFA",
+    "text": "#F4F2FA",
+    "textMuted": "#938DA3",
+    "textOnAccent": "#101018",
+    "accentMutedText": "#B5A0DA",
+    "danger": "#F07189",
+    "warning": "#E8B86D",
+    "success": "#75C9A7"
+  }
+}

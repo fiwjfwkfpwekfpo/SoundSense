@@ -1,0 +1,9 @@
+{
+  "version": 1, "name": "AMOLED", "scheme": "dark",
+  "palette": {
+    "mainBg": "#000000", "barBg": "#000000f2", "cardBg": "#050505", "cardHover": "#101010",
+    "border": "#ffffff3d", "borderLight": "#a1a1a1", "accent": "#ffffff", "text": "#ffffff",
+    "textMuted": "#a1a1a1", "textOnAccent": "#000000", "accentMutedText": "#a1a1a1",
+    "danger": "#ffffff", "warning": "#dedede", "success": "#bfbfbf", "bgOverlay": "#000000cc"
+  }
+}

@@ -1,0 +1,17 @@
+/* Effects, their previews, and interaction motion share the per-group contract. */
+[data-motion-group] { will-change: auto; }
+[data-motion-group='title'] { position: relative; }
+[data-motion-content] { transform-origin: left; }
+.motion-content { display: inherit; flex-direction: inherit; width: 100%; }
+.motion-fill { position: absolute; inset: 0; display: block; overflow: hidden; pointer-events: none; color: var(--color-text); transform-origin: left; }
+.motion-fill-content { display: block; width: 100%; transform-origin: left; }
+:root[data-motion-lyrics='fill'] [data-motion-group='lyrics'] { position: relative; }
+:root[data-motion-lyrics='fill'] [data-motion-group='lyrics'].active { color: var(--color-text-muted); }
+:root[data-motion-general='none'] button:active:not(:disabled),
+:root[data-motion-general='fade'] button:active:not(:disabled) { transform: none; }
+:root[data-motion-general='slide'] button:active:not(:disabled) { transform: translateY(var(--space-1)); }
+:root[data-motion-general='scale'] button:active:not(:disabled) { transform: scale(var(--transform-press)); }
+.wave-progress { transform-origin: left; }
+.wave-progress canvas { transform-origin: left; }
+
+[data-title-text] { display: inline-block; transform-origin: center; }
