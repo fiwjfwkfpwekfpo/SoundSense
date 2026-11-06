@@ -3,7 +3,7 @@
  * Release: checks → APK → signed manifest → `releases` branch of the GitHub repository → (the Telegram bot announces it).
  *
  *   node scripts/release/publish.mjs [--channel=stable|beta] [--skip-tests] [--skip-build]
- *                                    [--full-tests] [--telegram] [--dry-run]
+ *                                    [--full-tests] [--skip-desktop] [--telegram] [--dry-run]
  *
  * The app looks at `<channel>.json` in the `releases` branch. If its versionCode is higher than the
  * installed one, the app downloads the APK listed there (size, SHA-256 and the Ed25519 signature
@@ -16,7 +16,7 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync, statSync, copyFileSync, readdirSync, rmSync, mkdtempSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { channelVersionCode, releaseChannel } from '../lib/channels.mjs';
@@ -27,7 +27,7 @@ const args = new Set(process.argv.slice(2));
 const dry = args.has('--dry-run');
 const channel = releaseChannel([...args].find(arg => arg.startsWith('--channel='))?.slice('--channel='.length) ?? process.env.SS_CHANNEL ?? 'stable');
 if (args.has('--help')) {
-  console.log('Usage: npm run release:stable|release:beta -- [--dry-run] [--skip-tests] [--skip-build] [--full-tests] [--telegram]');
+  console.log('Usage: npm run release:stable|release:beta -- [--dry-run] [--skip-tests] [--skip-build] [--full-tests] [--skip-desktop] [--telegram]');
   console.log('--dry-run builds, verifies and signs locally without pushing to the releases branch or posting to Telegram.');
   process.exit(0);
 }
@@ -74,9 +74,51 @@ if (!certs.includes(EXPECTED_CERT)) fail('APK is signed with a different certifi
 const sha = createHash('sha256').update(readFileSync(apk)).digest('hex'), size = statSync(apk).size;
 console.log(`${filename}: ${size} bytes, sha256 ${sha}`);
 
+// Desktop: the AppImage is built with the same version and travels in the same signed manifest.
+const withDesktop = !args.has('--skip-desktop');
+const appImage = join(root, `artifacts/desktop/${channel.name}/SoundSense-${version}-${channel.name}-x86_64.AppImage`);
+const appImageUrl = `https://github.com/${REPO}/releases/download/v${version}/${basename(appImage)}`;
+if (withDesktop) {
+  if (!args.has('--skip-build')) { step('Build AppImage'); run('npm', ['run', channel.name === 'beta' ? 'desktop:appimage:beta' : 'desktop:appimage']); }
+  if (!existsSync(appImage)) fail('AppImage not found');
+  console.log(`${basename(appImage)}: ${statSync(appImage).size} bytes`);
+}
+
 step('Sign manifest');
 const signed = join(BUILDS, `${channel.name}-${version}.json`);
-run('node', ['scripts/release/sign-manifest.mjs', apk, signed, version, String(versionCode), ORIGIN], { env: { SS_CHANNEL: channel.name } });
+run('node', ['scripts/release/sign-manifest.mjs', apk, signed, version, String(versionCode), ORIGIN], { env: { SS_CHANNEL: channel.name, ...(withDesktop ? { SS_LINUX_APPIMAGE: appImage, SS_LINUX_URL: appImageUrl } : {}) } });
+
+/** GitHub REST call through curl (the proxy from .release/config.json, the token from .release/github-token). */
+function github(method, url, { json, file } = {}) {
+  const token = readFileSync(TOKEN_FILE, 'utf8').trim();
+  const list = ['-sS', '--connect-timeout', '20', '-m', file ? '3000' : '60', ...via, '-X', method, '-H', `Authorization: Bearer ${token}`, '-H', 'Accept: application/vnd.github+json', '-H', 'X-GitHub-Api-Version: 2022-11-28', '-w', '\n%{http_code}'];
+  if (json) list.push('-H', 'Content-Type: application/json', '--data-binary', JSON.stringify(json));
+  if (file) list.push('-H', 'Content-Type: application/octet-stream', '--data-binary', `@${file}`);
+  const out = run('curl', [...list, url], { capture: true }), cut = out.lastIndexOf('\n');
+  let body = null; try { body = JSON.parse(out.slice(0, cut)); } catch { /* No JSON body. */ }
+  return { status: Number(out.slice(cut + 1)), body };
+}
+/** The AppImage (over 100 MB) cannot live in a git branch: it is an asset of the GitHub Release v<version>. */
+function uploadAppImage() {
+  if (!existsSync(TOKEN_FILE)) fail(`The AppImage is uploaded through the GitHub API: put a token with Contents: write in ${TOKEN_FILE}`);
+  const base = `https://api.github.com/repos/${REPO}`, tag = `v${version}`;
+  let release = github('GET', `${base}/releases/tags/${tag}`);
+  if (release.status === 404) {
+    const body = ['## SoundSense ' + version, '', ...notes.ru.map(line => `- ${line}`), '', ...notes.en.map(line => `- ${line}`), '', 'Desktop builds are downloaded by the in-app updater; the Android packages are in the `releases` branch.'].join('\n');
+    release = github('POST', `${base}/releases`, { json: { tag_name: tag, target_commitish: run('git', ['rev-parse', 'HEAD'], { capture: true }).trim(), name: `SoundSense ${version}`, body, draft: false, prerelease: false } });
+  }
+  if (![200, 201].includes(release.status) || !release.body?.id) fail(`GitHub release ${tag}: HTTP ${release.status} ${release.body?.message ?? ''} (is the commit pushed?)`);
+  const name = basename(appImage), existing = release.body.assets?.find(asset => asset.name === name);
+  if (existing) {
+    if (existing.size === statSync(appImage).size) { console.log(`${name} is already attached to ${tag}`); return; }
+    fail(`${name} is already published with other content. Raise version/versionCode.`);
+  }
+  console.log(`Uploading ${name} to ${tag}…`);
+  const uploaded = github('POST', `https://uploads.github.com/repos/${REPO}/releases/${release.body.id}/assets?name=${encodeURIComponent(name)}`, { file: appImage });
+  if (uploaded.status !== 201) fail(`Upload failed: HTTP ${uploaded.status} ${uploaded.body?.message ?? ''}`);
+}
+
+if (!dry && withDesktop) { step('Upload AppImage'); uploadAppImage(); }
 
 if (!dry) {
   step(`Publish to the ${BRANCH} branch`);

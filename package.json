@@ -1,7 +1,7 @@
 {
   "name": "soundsense",
-  "version": "1.4.6",
-  "versionCode": 27,
+  "version": "1.4.7",
+  "versionCode": 28,
   "private": true,
   "description": "SoundSense music player",
   "type": "module",

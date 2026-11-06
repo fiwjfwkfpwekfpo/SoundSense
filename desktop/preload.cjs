@@ -22,5 +22,11 @@ contextBridge.exposeInMainWorld('soundsenseDesktop', {
     stats: () => call('waves:stats'), clear: () => call('waves:clear'), setLimit: bytes => call('waves:limit', bytes),
     onProgress(listener) { const handler = (_event, value) => listener(value); ipcRenderer.on('waves:progress', handler); return () => ipcRenderer.removeListener('waves:progress', handler); },
   },
+  updates: {
+    /** True only when running from an AppImage that can replace itself. */
+    available: ipcRenderer.sendSync('updates:available') === true,
+    download: (id, artifact) => call('updates:download', id, artifact), cancel: id => call('updates:cancel', id), install: token => call('updates:install', token),
+    onProgress(listener) { const handler = (_event, value) => listener(value); ipcRenderer.on('updates:progress', handler); return () => ipcRenderer.removeListener('updates:progress', handler); },
+  },
   onFlush(handler) { flushHandler = typeof handler === 'function' ? handler : null; },
 });

@@ -1,25 +1,21 @@
 {
-  "version": "1.4.6",
+  "version": "1.4.7",
   "ru": [
-    "Каталог плагинов: проверенные плагины можно скачать прямо в приложении (Настройки → Плагины).",
-    "Обновления приложения приходят через GitHub: бета и стабильная версия проверяются автоматически.",
-    "Синхронизация устройств стала стабильнее: обрывы сети и сна больше не оставляют «зависшее» соединение, повторное подключение быстрее."
+    "ПК (Linux): приложение обновляется само — новая версия AppImage скачивается и ставится по кнопке в настройках, подпись и контрольная сумма проверяются.",
+    "Установка AppImage добавляет запись меню и иконки по стандартам XDG; кэш вынесен в ~/.cache/soundsense."
   ],
   "en": [
-    "Plugin catalog: reviewed plugins can be downloaded right in the app (Settings → Plugins).",
-    "App updates come through GitHub: beta and stable are checked automatically.",
-    "Device sync is more stable: network drops and sleep no longer leave a stuck connection, and reconnecting is faster."
+    "Desktop (Linux): the app updates itself — a new AppImage is downloaded and installed from Settings, signature and checksum are verified.",
+    "Installing the AppImage adds a menu entry and icons following XDG; cache moved to ~/.cache/soundsense."
   ],
   "channel": {
     "ru": [
-      "Каталог плагинов: проверенные плагины можно скачать прямо в приложении (Настройки → Плагины).",
-      "Обновления приложения приходят через GitHub: бета и стабильная версия проверяются автоматически.",
-      "Синхронизация устройств стала стабильнее: обрывы сети и сна больше не оставляют «зависшее» соединение, повторное подключение быстрее."
+      "ПК (Linux): приложение обновляется само — новая версия AppImage скачивается и ставится по кнопке в настройках, подпись и контрольная сумма проверяются.",
+      "Установка AppImage добавляет запись меню и иконки по стандартам XDG; кэш вынесен в ~/.cache/soundsense."
     ],
     "en": [
-      "Plugin catalog: reviewed plugins can be downloaded right in the app (Settings → Plugins).",
-      "App updates come through GitHub: beta and stable are checked automatically.",
-      "Device sync is more stable: network drops and sleep no longer leave a stuck connection, and reconnecting is faster."
+      "Desktop (Linux): the app updates itself — a new AppImage is downloaded and installed from Settings, signature and checksum are verified.",
+      "Installing the AppImage adds a menu entry and icons following XDG; cache moved to ~/.cache/soundsense."
     ]
   }
 }

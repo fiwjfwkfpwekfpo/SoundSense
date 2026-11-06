@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, ipcMain, protocol, session, shell } from 'electron';
+import { app, BrowserWindow, clipboard, ipcMain, net, protocol, session, shell } from 'electron';
 import { existsSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { readFile } from 'node:fs/promises';
@@ -13,6 +13,7 @@ import { mediaHandler } from './media.mjs';
 import { createWaveforms } from './waveform.mjs';
 import { integrate, unintegrate } from './integration.mjs';
 import { linkCaches } from './caches.mjs';
+import { createUpdater } from './updater.mjs';
 /*
  * SoundSense desktop (Electron). The window runs the same Svelte app as Android; this process
  * only provides what a browser page cannot do itself: files on disk, network without CORS,
@@ -66,6 +67,7 @@ protocol.registerSchemesAsPrivileged([
 const state = createStateStore(paths), secrets = createSecrets(paths), http = createHttp();
 let window;
 const files = createFiles(paths, () => window);
+const updater = createUpdater({ cache: paths.cache, appImage: process.platform === 'linux' ? process.env.APPIMAGE : undefined, fetch: (url, options) => net.fetch(url, options), onProgress: value => window?.webContents.send('updates:progress', value), quit: () => app.quit() });
 const waves = createWaveforms(paths, value => window?.webContents.send('waves:progress', value));
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.txt': 'text/plain; charset=utf-8', '.ico': 'image/x-icon' };
 
@@ -120,6 +122,10 @@ function registerIpc() {
   handle('waves:stats', () => waves.stats());
   handle('waves:clear', () => waves.clear());
   handle('waves:limit', bytes => waves.setLimit(bytes));
+  ipcMain.on('updates:available', event => { event.returnValue = trusted(event.senderFrame) && updater.available(); });
+  handle('updates:download', (id, artifact) => updater.download(String(id), artifact));
+  handle('updates:cancel', id => updater.cancel(String(id)));
+  handle('updates:install', token => updater.install(String(token)));
   // The window asks to be closed for real after it has written pending state.
   ipcMain.on('window:flushed', event => { if (trusted(event.senderFrame)) void state.flush().finally(() => { log('state flushed, closing'); closing = true; window?.close(); }); });
 }
