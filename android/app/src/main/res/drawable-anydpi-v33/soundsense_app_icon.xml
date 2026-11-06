@@ -1,0 +1,1 @@
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/soundsense_icon_background" /><foreground><inset android:inset="10%" android:drawable="@drawable/soundsense_logo" /></foreground><monochrome android:drawable="@drawable/ic_playback" /></adaptive-icon>

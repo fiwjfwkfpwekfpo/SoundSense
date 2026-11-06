@@ -1,0 +1,111 @@
+apply plugin: 'com.android.application'
+def appManifest = new groovy.json.JsonSlurper().parse(rootProject.file('../package.json'))
+def channels = new groovy.json.JsonSlurper().parse(rootProject.file('../config/channels.json'))
+def localSigningStore = System.getenv('SS_ANDROID_KEYSTORE')
+def signingAvailable = localSigningStore && file(localSigningStore).isFile()
+// Used only by the isolated emulator to exercise an upgrade from an older build.
+def qaVersionCode = providers.gradleProperty('qaVersionCode').orNull
+def qaVersionName = providers.gradleProperty('qaVersionName').orNull
+gradle.taskGraph.whenReady { graph ->
+    if (qaVersionCode && graph.allTasks.any { it.project.path == ':app' && it.name.toLowerCase().contains('release') }) {
+        throw new GradleException('QA version overrides are forbidden for release builds')
+    }
+}
+
+android {
+    namespace "app.soundsense"
+    buildFeatures { buildConfig true }
+    compileSdk rootProject.ext.compileSdkVersion
+    sourceSets.main.res.srcDir layout.buildDirectory.dir('generated/res/brand')
+    // cap sync is shared by both flavors. Never package its last copied web bundle.
+    sourceSets.main.assets.setSrcDirs([])
+    defaultConfig {
+        applicationId "app.soundsense"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode ((qaVersionCode ?: appManifest.versionCode) as Integer)
+        versionName (qaVersionName ?: appManifest.version)
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    flavorDimensions 'channel'
+    productFlavors {
+        stable { dimension 'channel' }
+        beta { dimension 'channel' }
+    }
+    productFlavors.all { flavor ->
+        def channel = channels[flavor.name]
+        applicationId channel.appId
+        resValue 'string', 'app_name', channel.appName
+        resValue 'string', 'title_activity_main', channel.appName
+        resValue 'string', 'package_name', channel.appId
+        resValue 'string', 'custom_url_scheme', channel.appId
+        buildConfigField 'boolean', 'DEBUG_TOOLS', channel.debugTools.toString()
+        // Channel used until the user picks one in Settings.
+        buildConfigField 'String', 'DEFAULT_CHANNEL', '"' + flavor.name + '"'
+        // Per-channel versionCode (scripts/lib/channels.mjs): base·10, stable +5.
+        if (!qaVersionCode) versionCode ((appManifest.versionCode as Integer) * 10 + (flavor.name == 'stable' ? 5 : 0))
+    }
+    signingConfigs {
+        if (signingAvailable) {
+            release {
+                storeFile file(localSigningStore)
+                storePassword System.getenv('SS_ANDROID_STORE_PASSWORD') ?: 'android'
+                keyAlias System.getenv('SS_ANDROID_KEY_ALIAS') ?: 'AndroidDebugKey'
+                keyPassword System.getenv('SS_ANDROID_KEY_PASSWORD') ?: 'android'
+            }
+        }
+    }
+    buildTypes {
+        release {
+            debuggable false
+            if (signingAvailable) signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+apply from: rootProject.file('gradle/web-assets.gradle')
+
+tasks.register('prepareBrandAssets', Copy) {
+    from(rootProject.file('../assets/branding/SoundSense.png'))
+    into(layout.buildDirectory.dir('generated/res/brand/drawable-nodpi'))
+    rename { 'soundsense_logo.png' }
+}
+tasks.named('preBuild').configure { dependsOn('prepareBrandAssets') }
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation "androidx.media3:media3-exoplayer:1.11.1"
+    implementation "androidx.media3:media3-exoplayer-hls:1.11.1"
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

@@ -1,0 +1,54 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.*
+
+/** Each Android variant receives its own web payload, with explicit task dependencies. */
+abstract class PrepareChannelWebAssets extends DefaultTask {
+    @InputDirectory abstract DirectoryProperty getWebDirectory()
+    @InputFile abstract RegularFileProperty getCapacitorConfiguration()
+    @InputFiles @PathSensitive(PathSensitivity.RELATIVE) abstract ConfigurableFileCollection getBridgeAssets()
+    @Input abstract Property<String> getChannelMetadata()
+    @Input abstract Property<String> getReleaseVersion()
+    @Input abstract Property<Integer> getReleaseCode()
+    @OutputDirectory abstract DirectoryProperty getOutputDirectory()
+
+    @TaskAction void prepare() {
+        def expected = new JsonSlurper().parseText(channelMetadata.get())
+        def web = webDirectory.get().asFile
+        def metadata = new JsonSlurper().parse(new File(web, 'release.json'))
+        if (metadata.channel != expected.name || metadata.debugTools != expected.debugTools || metadata.appId != expected.appId || metadata.version != releaseVersion.get() || metadata.versionCode != releaseCode.get()) {
+            throw new GradleException("Stale or mismatched ${expected.name} web bundle. Run npm run build:${expected.name} first.")
+        }
+        def destination = outputDirectory.get().asFile
+        project.sync {
+            from(web) { into 'public' }
+            from(bridgeAssets)
+            into(destination)
+        }
+        def config = new JsonSlurper().parse(capacitorConfiguration.get().asFile)
+        config.appId = expected.appId; config.appName = expected.appName; config.webDir = "dist/${expected.name}"
+        config.loggingBehavior = 'none'
+        config.android = (config.android ?: [:]) + [webContentsDebuggingEnabled: expected.debugTools]
+        new File(destination, 'capacitor.config.json').text = JsonOutput.toJson(config)
+    }
+}
+
+def channels = new JsonSlurper().parse(rootProject.file('../config/channels.json'))
+def manifest = new JsonSlurper().parse(rootProject.file('../package.json'))
+androidComponents.onVariants(androidComponents.selector().all()) { variant ->
+    def name = variant.productFlavors.find { it.first == 'channel' }.second
+    def expected = [name: name] + channels[name]
+    def prepare = tasks.register("prepare${variant.name.capitalize()}WebAssets", PrepareChannelWebAssets) {
+        webDirectory.set(rootProject.layout.projectDirectory.dir("../dist/${name}"))
+        capacitorConfiguration.set(layout.projectDirectory.file('src/main/assets/capacitor.config.json'))
+        bridgeAssets.from(fileTree('src/main/assets') { exclude 'public/**', 'capacitor.config.json' })
+        channelMetadata.set(JsonOutput.toJson(expected))
+        releaseVersion.set(manifest.version)
+        releaseCode.set((manifest.versionCode as Integer) * 10 + (name == 'stable' ? 5 : 0)) // scripts/lib/channels.mjs
+    }
+    variant.sources.assets.addGeneratedSourceDirectory(prepare) { it.outputDirectory }
+}
