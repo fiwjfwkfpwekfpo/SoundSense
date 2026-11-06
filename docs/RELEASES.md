@@ -49,3 +49,7 @@ Dry run выполняет локальные проверки, сборку и 
 Подписанный payload содержит `channel`. Stable отклоняет beta и наоборот. Старые manifest без `channel` относятся к stable. Счётчик защиты от отката у beta отдельный. Android дополнительно проверяет package ID, сертификат, размер и SHA-256 APK.
 
 Переименование applicationId означает отдельную установку относительно старого пакета. При первом выпуске новых идентификаторов данные не переносятся автоматически. Каналы stable и beta также хранят данные независимо. Наличие сборок и автоматических тестов не заменяет проверку физического устройства.
+
+## Desktop (Linux AppImage)
+
+`npm run release:<channel>` also builds `SoundSense-<version>-<channel>-x86_64.AppImage`, uploads it as an asset of the GitHub Release `v<version>` (over 100 MB, so it cannot live in the `releases` branch; the upload is throttled to 5 MB/s because GitHub cuts fast big uploads) and adds a `linux-appimage` artifact (size, SHA-256, release URL) to the signed manifest. `--skip-desktop` releases only the Android package. The commit must be pushed before a release (the tag points to it).

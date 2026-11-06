@@ -93,8 +93,10 @@ function github(method, url, { json, file } = {}) {
   const token = readFileSync(TOKEN_FILE, 'utf8').trim();
   const list = ['-sS', '--connect-timeout', '20', '-m', file ? '3000' : '60', ...via, '-X', method, '-H', `Authorization: Bearer ${token}`, '-H', 'Accept: application/vnd.github+json', '-H', 'X-GitHub-Api-Version: 2022-11-28', '-w', '\n%{http_code}'];
   if (json) list.push('-H', 'Content-Type: application/json', '--data-binary', JSON.stringify(json));
-  if (file) list.push('-H', 'Content-Type: application/octet-stream', '--data-binary', `@${file}`);
-  const out = run('curl', [...list, url], { capture: true }), cut = out.lastIndexOf('\n');
+  if (file) list.push('--limit-rate', '5M', '-H', 'Content-Type: application/octet-stream', '--data-binary', `@${file}`);
+  const result = run('curl', [...list, url], { capture: true, soft: true });
+  if (result.status !== 0) return { status: 0, body: { message: `curl exit ${result.status}: ${String(result.stderr).trim().split('\n').pop()}` } };
+  const out = result.stdout, cut = out.lastIndexOf('\n');
   let body = null; try { body = JSON.parse(out.slice(0, cut)); } catch { /* No JSON body. */ }
   return { status: Number(out.slice(cut + 1)), body };
 }
@@ -114,7 +116,13 @@ function uploadAppImage() {
     fail(`${name} is already published with other content. Raise version/versionCode.`);
   }
   console.log(`Uploading ${name} to ${tag}…`);
-  const uploaded = github('POST', `https://uploads.github.com/repos/${REPO}/releases/${release.body.id}/assets?name=${encodeURIComponent(name)}`, { file: appImage });
+  let uploaded; for (let attempt = 1; attempt <= 4; attempt++) {
+    uploaded = github('POST', `https://uploads.github.com/repos/${REPO}/releases/${release.body.id}/assets?name=${encodeURIComponent(name)}`, { file: appImage });
+    if (uploaded.status === 201) break;
+    console.log(`Attempt ${attempt} failed: HTTP ${uploaded.status} ${uploaded.body?.message ?? ''}`);
+    const again = github('GET', `${base}/releases/${release.body.id}/assets`);   // A cut-off upload can leave a broken asset: remove it.
+    for (const asset of Array.isArray(again.body) ? again.body : []) if (asset.name === name) github('DELETE', `${base}/releases/assets/${asset.id}`);
+  }
   if (uploaded.status !== 201) fail(`Upload failed: HTTP ${uploaded.status} ${uploaded.body?.message ?? ''}`);
 }
 
