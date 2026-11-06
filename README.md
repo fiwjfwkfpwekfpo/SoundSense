@@ -13,6 +13,8 @@ SoundCloud, YouTube Music, Яндекс Музыка и локальные фа�
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
 ![Telemetry](https://img.shields.io/badge/телеметрия-нет-8b5cf6?style=flat)
 
+🇷🇺 Русский · [🇬🇧 English](README.en.md)
+
 [Скачать](#установка) · [Плагины](#плагины) · [Разработка](#разработка) · [Документация](docs/)
 
 </div>
@@ -129,6 +131,11 @@ scripts/         сборка, проверки, выпуск
 tests/           unit, UI, каналы, производительность
 docs/            ТЗ, оформление, плагины, выпуски, изменения
 ```
+
+## Сообщество
+
+- Канал: [@OpenSoundSense](https://t.me/OpenSoundSense)
+- Форум: [@SoundSenseForum](https://t.me/SoundSenseForum)
 
 ## Документация
 
