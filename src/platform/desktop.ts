@@ -28,6 +28,13 @@ export interface DesktopBridge {
     stats(): Promise<{ bytes: number; count: number; limit: number }>; clear(): Promise<void>; setLimit(bytes: number): Promise<void>;
     onProgress(listener: (value: { uri: string; samples: readonly number[]; progress: number; status: 'building' | 'ready' | 'deferred' }) => void): () => void;
   };
+  /** Self-update of the AppImage (desktop/updater.mjs). `available` is false outside an AppImage. */
+  updates: {
+    available: boolean;
+    download(id: string, artifact: { filename: string; size: number; sha256: string; urls: readonly string[] }): Promise<string>;
+    cancel(id: string): Promise<void>; install(token: string): Promise<'opened'>;
+    onProgress(listener: (value: { id: string; bytes: number }) => void): () => void;
+  };
   /** Called before the window closes; pending state must be handed over before it resolves. */
   onFlush(handler: () => void | Promise<void>): void;
 }
