@@ -1,0 +1,10 @@
+{
+  "id": "app.soundsense.example.lyrics-ovh",
+  "name": "Тексты lyrics.ovh",
+  "version": "1.0.0",
+  "apiVersion": "1.0",
+  "author": "SoundSense",
+  "description": "Ещё один источник обычных (не синхронных) текстов песен.",
+  "entry": "main.js",
+  "permissions": ["provider.lyrics", "network:api.lyrics.ovh"]
+}

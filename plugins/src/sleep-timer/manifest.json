@@ -1,0 +1,10 @@
+{
+  "id": "app.soundsense.sleep-timer",
+  "name": "Таймер сна",
+  "version": "1.0.0",
+  "apiVersion": "1.1",
+  "author": "SoundSense",
+  "description": "Ставит музыку на паузу через 15–60 минут или после текущего трека. Свой экран и кнопка в плеере.",
+  "entry": "main.js",
+  "permissions": ["player.read", "player.control", "notify", "ui.playerButton", "ui.screen"]
+}

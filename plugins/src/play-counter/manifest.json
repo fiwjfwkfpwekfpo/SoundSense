@@ -1,0 +1,24 @@
+{
+  "id": "app.soundsense.example.play-counter",
+  "name": "Счётчик прослушиваний",
+  "version": "1.1.0",
+  "apiVersion": "1.1",
+  "author": "SoundSense",
+  "description": "Считает, сколько раз ты слушал каждый трек: кнопка в плеере, пункт в меню трека и экран с топом.",
+  "entry": "main.js",
+  "permissions": [
+    "player.read",
+    "notify",
+    "ui.trackMenu",
+    "ui.playerButton",
+    "ui.screen"
+  ],
+  "settings": [
+    {
+      "key": "milestones",
+      "type": "toggle",
+      "label": "Сообщать о 10, 50 и 100 прослушиваниях",
+      "default": true
+    }
+  ]
+}

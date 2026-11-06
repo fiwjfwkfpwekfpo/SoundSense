@@ -1,0 +1,14 @@
+{
+  "id": "app.soundsense.listenbrainz-scrobbler",
+  "name": "Скробблер ListenBrainz",
+  "version": "1.0.0",
+  "apiVersion": "1.1",
+  "author": "SoundSense",
+  "description": "Отправляет прослушанные треки в ListenBrainz (открытый аналог Last.fm). Трек засчитывается, когда проиграно половина или 4 минуты.",
+  "entry": "main.js",
+  "permissions": ["player.read", "notify", "network:api.listenbrainz.org"],
+  "settings": [
+    { "key": "token", "type": "text", "label": "Токен пользователя ListenBrainz", "default": "", "secret": true },
+    { "key": "nowPlaying", "type": "toggle", "label": "Показывать «Сейчас играет»", "default": true }
+  ]
+}

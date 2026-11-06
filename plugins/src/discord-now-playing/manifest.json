@@ -1,0 +1,16 @@
+{
+  "id": "app.soundsense.discord-now-playing",
+  "name": "Now Playing в Discord",
+  "version": "1.0.0",
+  "apiVersion": "1.1",
+  "author": "SoundSense",
+  "description": "Отправляет в канал Discord сообщение с текущим треком через вебхук. Сообщение уходит, если трек играет дольше выбранного времени.",
+  "entry": "main.js",
+  "permissions": ["player.read", "notify", "network:discord.com"],
+  "settings": [
+    { "key": "webhook", "type": "text", "label": "Ссылка вебхука Discord", "default": "", "secret": true },
+    { "key": "delay", "type": "select", "label": "Отправлять после", "default": "20", "options": [
+      { "value": "5", "label": "5 секунд" }, { "value": "20", "label": "20 секунд" }, { "value": "60", "label": "1 минуты" } ] },
+    { "key": "name", "type": "text", "label": "Имя отправителя", "default": "SoundSense" }
+  ]
+}

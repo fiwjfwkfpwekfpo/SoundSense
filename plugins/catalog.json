@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "plugins": [
+    {
+      "id": "app.soundsense.discord-now-playing",
+      "name": "Now Playing в Discord",
+      "description": "Отправляет в канал Discord сообщение с текущим треком через вебхук. Сообщение уходит, если трек играет дольше выбранного времени.",
+      "version": "1.0.0",
+      "author": "SoundSense",
+      "apiVersion": "1.1",
+      "permissions": [
+        "player.read",
+        "notify",
+        "network:discord.com"
+      ],
+      "package": "packages/app.soundsense.discord-now-playing-1.0.0.ssplugin.b64",
+      "size": 1890,
+      "sha256": "200bb9196d71b5d2dfa59143ad6fa85e0f95247357e00e732f60a6565c7d3a58",
+      "icon": "src/discord-now-playing/icon.svg"
+    },
+    {
+      "id": "app.soundsense.listenbrainz-scrobbler",
+      "name": "Скробблер ListenBrainz",
+      "description": "Отправляет прослушанные треки в ListenBrainz (открытый аналог Last.fm). Трек засчитывается, когда проиграно половина или 4 минуты.",
+      "version": "1.0.0",
+      "author": "SoundSense",
+      "apiVersion": "1.1",
+      "permissions": [
+        "player.read",
+        "notify",
+        "network:api.listenbrainz.org"
+      ],
+      "package": "packages/app.soundsense.listenbrainz-scrobbler-1.0.0.ssplugin.b64",
+      "size": 1902,
+      "sha256": "8396947eabaa5e37e91ca031e93684a182503dbcef8342419625ca8e10060db8",
+      "icon": "src/listenbrainz-scrobbler/icon.svg"
+    },
+    {
+      "id": "app.soundsense.example.lyrics-ovh",
+      "name": "Тексты lyrics.ovh",
+      "description": "Ещё один источник обычных (не синхронных) текстов песен.",
+      "version": "1.0.0",
+      "author": "SoundSense",
+      "apiVersion": "1.0",
+      "permissions": [
+        "provider.lyrics",
+        "network:api.lyrics.ovh"
+      ],
+      "package": "packages/app.soundsense.example.lyrics-ovh-1.0.0.ssplugin.b64",
+      "size": 798,
+      "sha256": "61c673978fd4330f97aec12e68582baa7c96ca3d36ab4565665c8dfaee1e06d3"
+    },
+    {
+      "id": "app.soundsense.example.play-counter",
+      "name": "Счётчик прослушиваний",
+      "description": "Считает, сколько раз ты слушал каждый трек: кнопка в плеере, пункт в меню трека и экран с топом.",
+      "version": "1.1.0",
+      "author": "SoundSense",
+      "apiVersion": "1.1",
+      "permissions": [
+        "player.read",
+        "notify",
+        "ui.trackMenu",
+        "ui.playerButton",
+        "ui.screen"
+      ],
+      "package": "packages/app.soundsense.example.play-counter-1.1.0.ssplugin.b64",
+      "size": 1672,
+      "sha256": "c3b5fccf366bb854d012316b9dff076b8bc201c2b8df8d985385ad14faca4c8f"
+    },
+    {
+      "id": "app.soundsense.sleep-timer",
+      "name": "Таймер сна",
+      "description": "Ставит музыку на паузу через 15–60 минут или после текущего трека. Свой экран и кнопка в плеере.",
+      "version": "1.0.0",
+      "author": "SoundSense",
+      "apiVersion": "1.1",
+      "permissions": [
+        "player.read",
+        "player.control",
+        "notify",
+        "ui.playerButton",
+        "ui.screen"
+      ],
+      "package": "packages/app.soundsense.sleep-timer-1.0.0.ssplugin.b64",
+      "size": 1785,
+      "sha256": "f542dd6df3461e1d1c3831d1360729a6747a13b5d1fdbd18d9e7d2c7ba0852f3",
+      "icon": "src/sleep-timer/icon.svg"
+    }
+  ]
+}
