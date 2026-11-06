@@ -42,7 +42,7 @@ npm run release:stable -- --dry-run
 npm run release:beta -- --dry-run
 ```
 
-Dry run выполняет локальные проверки, сборку и подпись manifest, не публикуя ветку `releases` и не отправляя пост в Telegram. Для подписи нужен локальный ключ обновлений, соответствующий `src/core/update-key.json`. Нормальные команды `release:stable` и `release:beta` кладут APK и подписанный manifest выбранного канала в ветку `releases` (одним коммитом, старые файлы этого канала заменяются) и отправляют пост, если Telegram настроен. `--no-telegram` отключает отправку; `--skip-build` повторно проверяет готовый APK, включая вложенные web-метаданные. Пример полного набора проверок: `npm run release:beta -- --full-tests --no-telegram`.
+Dry run выполняет локальные проверки, сборку и подпись manifest, не публикуя ветку `releases` и не отправляя пост в Telegram. Для подписи нужен локальный ключ обновлений, соответствующий `src/core/update-key.json`. Нормальные команды `release:stable` и `release:beta` кладут APK и подписанный manifest выбранного канала в ветку `releases` (одним коммитом, старые файлы этого канала заменяются) Объявление о версии в канале и форуме публикует бот (`tools/telegram`): он сам замечает новую версию в ветке `releases`. `--telegram` дополнительно отправляет APK файлом в канал; `--skip-build` повторно проверяет готовый APK, включая вложенные web-метаданные. Пример полного набора проверок: `npm run release:beta -- --full-tests`.
 
 Секреты (токен Telegram, прокси) хранятся только в `.release/config.json`; новые APK и подписанные manifest — в `artifacts/android/<channel>/`. Эти каталоги исключены из Git. Telegram можно настроить отдельно как `telegram.stable` и `telegram.beta` либо использовать общий `telegram`.
 

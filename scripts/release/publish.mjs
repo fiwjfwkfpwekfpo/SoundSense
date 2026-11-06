@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Release: checks → APK → signed manifest → `releases` branch of the GitHub repository → Telegram (optional).
+ * Release: checks → APK → signed manifest → `releases` branch of the GitHub repository → (the Telegram bot announces it).
  *
  *   node scripts/release/publish.mjs [--channel=stable|beta] [--skip-tests] [--skip-build]
- *                                    [--full-tests] [--no-telegram] [--dry-run]
+ *                                    [--full-tests] [--telegram] [--dry-run]
  *
  * The app looks at `<channel>.json` in the `releases` branch. If its versionCode is higher than the
  * installed one, the app downloads the APK listed there (size, SHA-256 and the Ed25519 signature
@@ -27,7 +27,7 @@ const args = new Set(process.argv.slice(2));
 const dry = args.has('--dry-run');
 const channel = releaseChannel([...args].find(arg => arg.startsWith('--channel='))?.slice('--channel='.length) ?? process.env.SS_CHANNEL ?? 'stable');
 if (args.has('--help')) {
-  console.log('Usage: npm run release:stable|release:beta -- [--dry-run] [--skip-tests] [--skip-build] [--full-tests] [--no-telegram]');
+  console.log('Usage: npm run release:stable|release:beta -- [--dry-run] [--skip-tests] [--skip-build] [--full-tests] [--telegram]');
   console.log('--dry-run builds, verifies and signs locally without pushing to the releases branch or posting to Telegram.');
   process.exit(0);
 }
@@ -100,7 +100,8 @@ if (!dry) {
   else console.log('Branch: OK');
 }
 
-if (!args.has('--no-telegram')) {
+// Announcements are posted by the channel bot (tools/telegram), which watches the releases branch. This step only attaches the APK on request.
+if (args.has('--telegram')) {
   step('Post to Telegram');
   const { token, chat } = config.telegram?.[channel.name] ?? config.telegram ?? {};
   if (!token) console.log(`Skipped: no token in ${CONFIG}`);

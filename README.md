@@ -138,3 +138,4 @@ docs/            ТЗ, оформление, плагины, выпуски, и�
 - [Выпуски и обновления](docs/RELEASES.md)
 - [Список изменений](docs/CHANGELOG.md)
 - [О репозитории](docs/REPOSITORY.md)
+- [Telegram-бот канала и форума](tools/telegram/README.md)
