@@ -32,7 +32,9 @@ if (args.has('--help')) {
   process.exit(0);
 }
 const REPO = 'fiwjfwkfpwekfpo/SoundSense', BRANCH = 'releases';
-const REMOTE = process.env.SS_RELEASES_REMOTE ?? `git@github.com:${REPO}.git`;
+const TOKEN_FILE = join(root, '.release/github-token');
+// With a token file (fine-grained, Contents: read and write) the branch is pushed over HTTPS; otherwise over SSH.
+const REMOTE = process.env.SS_RELEASES_REMOTE ?? (existsSync(TOKEN_FILE) ? `https://github.com/${REPO}.git` : `git@github.com:${REPO}.git`);
 const ORIGIN = `https://raw.githubusercontent.com/${REPO}/${BRANCH}`;
 const CONFIG = join(root, '.release/config.json'), BUILDS = join(root, `artifacts/android/${channel.name}`);
 const EXPECTED_CERT = process.env.SS_APK_CERT_SHA256 ?? '8a837ef4482d01e8367f82ed74d6b50de24743bd0ce5fb23385062231fe00c4e';
@@ -47,6 +49,7 @@ function run(cmd, list, options = {}) {
 
 const config = existsSync(CONFIG) ? JSON.parse(readFileSync(CONFIG, 'utf8')) : {};
 const via = config.proxy ? ['-x', config.proxy] : [];
+const gitAuth = existsSync(TOKEN_FILE) ? ['-c', `http.extraheader=Authorization: Basic ${Buffer.from(`x-access-token:${readFileSync(TOKEN_FILE, 'utf8').trim()}`).toString('base64')}`, ...(config.proxy ? ['-c', `http.proxy=${config.proxy}`] : [])] : [];
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const notes = JSON.parse(readFileSync(join(root, 'src/core/release-notes.json'), 'utf8'));
 const { version } = pkg, versionCode = channelVersionCode(pkg.versionCode, channel.name);
@@ -82,7 +85,7 @@ if (!dry) {
     run('git', ['init', '-q', '-b', BRANCH], { cwd: work });
     run('git', ['remote', 'add', 'origin', REMOTE], { cwd: work });
     // Keep the other channel's files from the previous release commit.
-    const fetched = run('git', ['fetch', '-q', '--depth=1', 'origin', BRANCH], { cwd: work, soft: true, capture: true });
+    const fetched = run('git', [...gitAuth, 'fetch', '-q', '--depth=1', 'origin', BRANCH], { cwd: work, soft: true, capture: true });
     if (fetched.status === 0) {
       run('git', ['checkout', '-q', 'FETCH_HEAD', '--', '.'], { cwd: work });
       const old = readdirSync(work).filter(name => name.endsWith(`-${channel.name}.apk`));
@@ -92,7 +95,7 @@ if (!dry) {
     writeFileSync(join(work, 'README.md'), `# SoundSense releases\n\nThis branch is updated automatically by the release script and is read by the app. It holds the latest signed \`stable.json\` / \`beta.json\` and the matching APK files. Do not edit by hand.\n\nSource code: the \`main\` branch.\n`);
     run('git', ['add', '-A'], { cwd: work });
     run('git', ['-c', 'user.name=SoundSense Releases', '-c', 'user.email=releases@users.noreply.github.com', 'commit', '-q', '-m', `SoundSense ${version} ${channel.name}`], { cwd: work });
-    run('git', ['push', '-f', 'origin', `${BRANCH}:${BRANCH}`], { cwd: work });
+    run('git', [...gitAuth, 'push', '-f', 'origin', `${BRANCH}:${BRANCH}`], { cwd: work });
   } finally { rmSync(work, { recursive: true, force: true }); }
   const live = JSON.parse(run('curl', ['-fsSL', '--connect-timeout', '20', ...via, `${ORIGIN}/${channel.name}.json?ts=${Date.now()}`], { capture: true }));
   const payload = JSON.parse(Buffer.from(live.payload, 'base64').toString('utf8'));
