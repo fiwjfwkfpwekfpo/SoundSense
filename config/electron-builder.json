@@ -14,19 +14,11 @@
     "target": [
       "AppImage"
     ],
-    "icon": "assets/branding/SoundSense.png",
-    "category": "AudioVideo",
+    "icon": "assets/branding/icons",
+    "category": "AudioVideo;Audio;Player",
     "executableName": "soundsense",
     "synopsis": "Personal music player",
-    "desktop": {
-      "entry": {
-        "Name": "SoundSense",
-        "Comment": "Music player",
-        "Categories": "AudioVideo;Audio;Player;",
-        "StartupWMClass": "soundsense",
-        "Keywords": "music;player;audio;"
-      }
-    }
+    "syncDesktopName": true
   },
   "publish": null,
   "toolsets": {
@@ -42,5 +34,17 @@
         "COPYING.LGPLv2.1"
       ]
     }
-  ]
+  ],
+  "appImage": {
+    "desktop": {
+      "entry": {
+        "Name": "SoundSense",
+        "Categories": "AudioVideo;Audio;Player;",
+        "StartupWMClass": "soundsense",
+        "Keywords": "music;player;audio;",
+        "GenericName": "Music Player",
+        "Comment": "Personal music player"
+      }
+    }
+  }
 }

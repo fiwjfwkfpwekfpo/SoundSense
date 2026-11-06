@@ -199,6 +199,8 @@ Discord-статус в ядре (можно будет плагином), ви�
 
 Правила:
 - На Linux уважаются переменные `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`.
+- Chromium держит дисковый кэш внутри `userData`, а Electron игнорирует `app.setPath('cache')` и `--disk-cache-dir`. Поэтому на Linux папки кэша Chromium в `<данные>/chromium/` — символические ссылки в `<кэш>/chromium/` (`desktop/caches.mjs`); в папке данных остаётся только то, что стоит бэкапить.
+- AppImage при запуске сам ставит запись меню и иконки в `$XDG_DATA_HOME` (`desktop/integration.mjs`; `--remove-integration` убирает, `SS_NO_INTEGRATION=1` отключает; записи чужих менеджеров AppImage не трогаются). Иконки: `assets/branding/icons/NxN.png`, размеры 16–512.
 - Electron по умолчанию складывает всё в одну папку настроек, поэтому при старте пути (`userData`, кэш, логи) переопределяются явно, до создания окна.
 - Папку скачанного можно сменить в настройках (например, на `~/Music/SoundSense`, чтобы файлы видели другие плееры). На Android есть опция «показывать в других плеерах» (MediaStore → `Music/SoundSense`).
 - Если keyring недоступен (на Hyprland его может не быть), приложение не сохраняет токен открытым текстом, а предупреждает и просит войти заново.

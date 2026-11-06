@@ -85,6 +85,12 @@ Ready-made builds live in the [`releases`](../../tree/releases) branch: `SoundSe
 
 The channels can be installed side by side: each has its own library and settings. The first APK is installed by hand (Android will ask you to allow installs from the source); after that the app updates itself.
 
+### Linux
+
+Build the desktop version with `npm run desktop:appimage` (the file appears in `artifacts/desktop/stable/`). Put the AppImage wherever you like (for example `~/Applications`), make it executable and run it. On first start the app adds itself to the menu: `~/.local/share/applications/soundsense.desktop` and icons in `~/.local/share/icons/hicolor/`. If you move the file, the entry is updated on the next start. If AppImageLauncher or a similar tool already manages the AppImage, the app leaves everything alone. Remove the entry with `./SoundSense.AppImage --remove-integration`; turn the automatic step off with `SS_NO_INTEGRATION=1`.
+
+Files follow XDG: settings in `~/.config/soundsense/`, data in `~/.local/share/soundsense/`, cache in `~/.cache/soundsense/`.
+
 ### Updates
 
 The app watches the `releases` branch. If it holds a version newer than the installed one, the app offers to download it. Before installing, it checks the Ed25519 signature, SHA-256, size, package ID and certificate; it will not accept an older version. Checks run on their own, at launch and on a timer.

@@ -46,9 +46,10 @@ if (command === 'dev') {
   await rm(app, { recursive: true, force: true }); await mkdir(app, { recursive: true });
   run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'config/vite.desktop.config.ts', '--logLevel', 'warn'], { env: { ...env, SS_DESKTOP_OUT: app } });
   await cp(resolve(root, 'desktop/preload.cjs'), resolve(app, 'preload.cjs'));
-  await cp(resolve(root, 'assets/branding/SoundSense.png'), resolve(app, 'icon.png'));
+  await cp(resolve(root, 'assets/branding/icons/512x512.png'), resolve(app, 'icon.png'));
+  await cp(resolve(root, 'assets/branding/icons'), resolve(app, 'icons'), { recursive: true }); // copied to ~/.local/share/icons on first start
   await cp(resolve(root, 'dist', channel.name), resolve(app, 'web'), { recursive: true });
-  await writeFile(resolve(app, 'package.json'), JSON.stringify({ name: 'soundsense', productName: 'SoundSense', version: manifest.version, description: manifest.description, main: 'main.mjs', author: 'SoundSense', license: 'UNLICENSED' }, null, 2) + '\n');
+  await writeFile(resolve(app, 'package.json'), JSON.stringify({ name: 'soundsense', productName: 'SoundSense', version: manifest.version, description: manifest.description, main: 'main.mjs', desktopName: 'soundsense.desktop', author: 'SoundSense', license: 'UNLICENSED' }, null, 2) + '\n');
   if (command === 'app') { if (!process.env.SS_NO_LAUNCH) run(electron, [app]); }
   else {
     run(process.execPath, ['node_modules/electron-builder/cli.js', '--linux', 'AppImage', '--x64', '--config', 'config/electron-builder.json',

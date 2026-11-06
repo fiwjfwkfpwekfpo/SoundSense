@@ -11,6 +11,8 @@ import { createHttp } from './http.mjs';
 import { createFiles } from './files.mjs';
 import { mediaHandler } from './media.mjs';
 import { createWaveforms } from './waveform.mjs';
+import { integrate, unintegrate } from './integration.mjs';
+import { linkCaches } from './caches.mjs';
 /*
  * SoundSense desktop (Electron). The window runs the same Svelte app as Android; this process
  * only provides what a browser page cannot do itself: files on disk, network without CORS,
@@ -24,20 +26,37 @@ const ORIGIN = 'app://soundsense';
 const log = process.env.SS_DESKTOP_LOG ? (...args) => console.log('[desktop]', ...args) : () => {};
 
 // Folders must be set before anything touches userData (SPEC §15). Chromium storage
-// (localStorage, IndexedDB) is app data. Electron ignores --disk-cache-dir, so Chromium's own
-// HTTP/GPU caches stay in data/chromium too; they are bounded and cleared via session.clearCache().
+// (localStorage, IndexedDB) is app data. Electron ignores --disk-cache-dir and the 'cache' path, so on Linux
+// Chromium's cache folders inside data/chromium are links into the cache folder (desktop/caches.mjs).
 const paths = appPaths();
 app.setName('SoundSense');
 app.setPath('userData', join(paths.data, 'chromium'));
 app.setPath('sessionData', join(paths.data, 'chromium'));
 app.setPath('crashDumps', join(paths.cache, 'crashes'));
 app.setAppLogsPath(join(paths.data, 'logs'));
+if (process.platform === 'linux') { try { linkCaches(join(paths.data, 'chromium'), join(paths.cache, 'chromium')); } catch (error) { log('cache folders stay in the data folder', error); } }
 app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 * 1024));
 // Some CDNs reject unknown clients; the window identifies as plain Chromium.
 app.userAgentFallback = app.userAgentFallback.replace(/\s(SoundSense|soundsense|Electron)\/\S+/g, '');
 if (process.platform === 'linux') app.setDesktopName('soundsense.desktop');
 
+// Menu entry and icons for the AppImage (desktop/integration.mjs). Flags: `--integrate` forces it
+// and exits, `--remove-integration` removes what it wrote and exits; SS_NO_INTEGRATION=1 turns the automatic step off.
+const iconsFolder = join(here, 'icons');
+if (process.platform === 'linux') {
+  const flags = process.argv.slice(1);
+  if (flags.includes('--remove-integration')) { const { removed } = unintegrate(); console.log(removed.length ? `Removed:\n${removed.join('\n')}` : 'Nothing to remove.'); process.exit(0); }
+  if (flags.includes('--integrate')) {
+    const { changed, skipped } = integrate({ appImage: process.env.APPIMAGE, iconsFolder, version: app.getVersion(), force: true });
+    console.log(skipped === 'not-appimage' ? 'Run this from the AppImage file.' : skipped ? `Skipped: ${skipped}` : changed.length ? `Written:\n${changed.join('\n')}` : 'Already up to date.');
+    process.exit(0);
+  }
+}
+
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
+if (process.platform === 'linux' && process.env.APPIMAGE && !process.env.SS_NO_INTEGRATION) {
+  try { const result = integrate({ appImage: process.env.APPIMAGE, iconsFolder, version: app.getVersion() }); log('integration', result); } catch (error) { log('integration failed', error); }
+}
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true, codeCache: true } },
