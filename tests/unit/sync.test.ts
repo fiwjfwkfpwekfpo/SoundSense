@@ -11,28 +11,43 @@ const track = (id: string, kind: 'sc' | 'local' = 'sc'): Track => ({ id, title: 
 /** A signalling server and WebRTC in memory: messages are JSON-copied and delivered asynchronously. */
 function network() {
   const endpoints = new Map<string, { accept(connection: SyncConnection): void }>();
+  const deaths = new Map<string, (() => void)[]>();
+  const pairs: { a: string; b: string; close(): void; mute(): void }[] = [];
+  let blocked = false;
+  const destroyed = new Set<string>();
   const pair = (a: string, b: string): [SyncConnection, SyncConnection] => {
-    type Side = SyncConnection & { link(value: Side): void; deliver(message: unknown): void; shut(): void };
-    const make = (peer: string): Side => { const listeners: ((message: unknown) => void)[] = [], closers: (() => void)[] = []; let other: Side; let open = true;
-      const self: Side = { peer, link(value: Side) { other = value; }, deliver(message: unknown) { if (open) for (const listener of listeners) listener(message); },
-        send(message: unknown) { const copy = JSON.parse(JSON.stringify(message)); setTimeout(() => other.deliver(copy), 1); },
+    type Side = SyncConnection & { link(value: Side): void; deliver(message: unknown): void; shut(): void; mute(): void };
+    const make = (peer: string): Side => { const listeners: ((message: unknown) => void)[] = [], closers: (() => void)[] = []; let other: Side; let open = true, muted = false;
+      const self: Side = { peer, link(value: Side) { other = value; }, mute() { muted = true; }, deliver(message: unknown) { if (open && !muted) for (const listener of listeners) listener(message); },
+        send(message: unknown) { if (muted) return; const copy = JSON.parse(JSON.stringify(message)); setTimeout(() => other.deliver(copy), 1); },
         onMessage(listener: (message: unknown) => void) { listeners.push(listener); }, onClose(listener: () => void) { closers.push(listener); },
         shut() { if (!open) return; open = false; for (const closer of closers) closer(); }, close() { self.shut(); other.shut(); } };
       return self; };
-    const left = make(b), right = make(a); left.link(right); right.link(left); return [left, right];
+    const left = make(b), right = make(a); left.link(right); right.link(left);
+    pairs.push({ a, b, close: () => left.close(), mute: () => { left.mute(); right.mute(); } });
+    return [left, right];
   };
   const open: OpenEndpoint = async id => {
     if (endpoints.has(id)) throw new Error('unavailable-id');
+    destroyed.delete(id);
     let accept: (connection: SyncConnection) => void = () => {};
     endpoints.set(id, { accept: connection => accept(connection) });
     const endpoint: SyncEndpoint = {
-      async connect(target) { const remote = endpoints.get(target); if (!remote) throw new Error('peer-unavailable'); const [mine, theirs] = pair(id, target); setTimeout(() => remote.accept(theirs), 1); return mine; },
+      async connect(target) { const remote = endpoints.get(target); if (blocked || destroyed.has(id) || !remote) throw new Error('peer-unavailable'); const [mine, theirs] = pair(id, target); setTimeout(() => remote.accept(theirs), 1); return mine; },
       onConnection(listener) { accept = listener; },
+      onClose(listener) { deaths.set(id, [...(deaths.get(id) ?? []), listener]); },
       close() { endpoints.delete(id); },
     };
     return endpoint;
   };
-  return { open, endpoints };
+  return {
+    open, endpoints,
+    /** The signalling identity is destroyed (what PeerJS does on a fatal server error). */
+    kill(id: string) { for (const link of pairs) if (link.a === id || link.b === id) link.close(); endpoints.delete(id); destroyed.add(id); for (const listener of deaths.get(id) ?? []) listener(); deaths.delete(id); },
+    /** Every open connection silently stops delivering (no close event) and nobody can dial. */
+    partition() { blocked = true; for (const link of pairs) link.mute(); },
+    heal() { blocked = false; },
+  };
 }
 function device(name: string, net: ReturnType<typeof network>, tracks: Track[] = []) {
   const library = createLibrary(), settings = createSettings({ language: 'ru', fontSize: 100, crossfade: 3, onboardingDone: false });
@@ -45,7 +60,14 @@ function device(name: string, net: ReturnType<typeof network>, tracks: Track[] =
 }
 // HMAC checks run on the real crypto thread pool, outside fake time: give them real turns too.
 const realTick = () => new Promise(resolve => setImmediate(resolve));
-const settle = async (ms = 3000) => { for (let spent = 0; spent < ms; spent += 50) { await vi.advanceTimersByTimeAsync(50); for (let turn = 0; turn < 25; turn++) await realTick(); } };
+const settle = async (ms = 3000, step = 50) => { for (let spent = 0; spent < ms; spent += step) { await vi.advanceTimersByTimeAsync(step); for (let turn = 0; turn < 25; turn++) await realTick(); } };
+
+
+async function link(a: ReturnType<typeof device>, b: ReturnType<typeof device>) {
+  await a.sync.showCode(); await settle(100);
+  const joined = b.sync.join((a.sync.getSnapshot().linking as { code: string }).code); await settle(); await joined;
+}
+const endpointOf = (net: ReturnType<typeof network>, value: ReturnType<typeof device>) => [...net.endpoints.keys()].find(id => id.endsWith(`-${value.sync.getSnapshot().device.id}`))!;
 
 describe('sync merge rules', () => {
   it('stamps new and changed items, keeps unchanged ones, leaves tombstones', () => {
@@ -140,5 +162,56 @@ describe('device sync', () => {
     pc.sync.unlink(phone.sync.getSnapshot().device.id); await settle();
     expect(phone.sync.getSnapshot().linked).toBe(false);
     expect(pc.sync.getSnapshot().devices).toEqual([]);
+  });
+});
+
+describe('device sync under failures', () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] }); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('reopens its signalling identity and reconnects after the server drops it', async () => {
+    const net = network();
+    const pc = device('PC', net, [track('1'), track('2')]), phone = device('Phone', net);
+    await link(pc, phone);
+    net.kill(endpointOf(net, phone)); await settle(1000);
+    expect(pc.sync.getSnapshot().devices[0]!.online).toBe(false);
+    pc.library.setLiked('2', true);
+    await settle(90_000, 1000);
+    expect(phone.library.getTrack('2')?.liked).toBe(true);
+    expect(pc.sync.getSnapshot().devices[0]!.online).toBe(true);
+  });
+
+  it('notices a connection that went silent, drops it and catches up after the network is back', async () => {
+    const net = network();
+    const pc = device('PC', net, [track('1'), track('2')]), phone = device('Phone', net);
+    await link(pc, phone);
+    net.partition();
+    pc.library.setLiked('1', true); await settle(1000);
+    await settle(60_000, 1000);
+    expect(pc.sync.getSnapshot().devices[0]!.online).toBe(false); // keep-alive gave up on the dead link
+    expect(phone.sync.getSnapshot().devices[0]!.online).toBe(false);
+    net.heal(); await settle(90_000, 1000);
+    expect(phone.library.getTrack('1')?.liked).toBe(true);
+    expect(pc.sync.getSnapshot().devices[0]!.online).toBe(true);
+  });
+
+  it('closes a connection that never finishes the handshake', async () => {
+    const net = network();
+    const pc = device('PC', net, [track('1')]), phone = device('Phone', net);
+    await link(pc, phone);
+    const intruder = await net.open('idle');
+    const connection = await intruder.connect(endpointOf(net, pc));
+    let closed = false; connection.onClose(() => { closed = true; });
+    await settle(15_000, 500);
+    expect(closed).toBe(true);
+  });
+
+  it('nudge() redials at once instead of waiting for the next retry', async () => {
+    const net = network();
+    const pc = device('PC', net, [track('1')]), phone = device('Phone', net);
+    await link(pc, phone);
+    net.partition(); await settle(60_000, 1000);
+    net.heal(); pc.sync.nudge(); await settle(3000);
+    expect(pc.sync.getSnapshot().devices[0]!.online).toBe(true);
   });
 });

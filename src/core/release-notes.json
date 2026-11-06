@@ -1,17 +1,25 @@
 {
-  "version": "1.4.4",
+  "version": "1.4.5",
   "ru": [
-    "Обновлён вид настроек: вкладки слева на ПК, аккуратные строки вместо больших кнопок."
+    "Каталог плагинов: проверенные плагины можно скачать прямо в приложении (Настройки → Плагины).",
+    "Обновления приложения приходят через GitHub: бета и стабильная версия проверяются автоматически.",
+    "Синхронизация устройств стала стабильнее: обрывы сети и сна больше не оставляют «зависшее» соединение, повторное подключение быстрее."
   ],
   "en": [
-    "Updated the settings look: tabs on the left on desktop, tidy rows instead of large buttons."
+    "Plugin catalog: reviewed plugins can be downloaded right in the app (Settings → Plugins).",
+    "App updates come through GitHub: beta and stable are checked automatically.",
+    "Device sync is more stable: network drops and sleep no longer leave a stuck connection, and reconnecting is faster."
   ],
   "channel": {
     "ru": [
-      "Обновлён вид настроек: вкладки слева на ПК, аккуратные строки вместо больших кнопок."
+      "Каталог плагинов: проверенные плагины можно скачать прямо в приложении (Настройки → Плагины).",
+      "Обновления приложения приходят через GitHub: бета и стабильная версия проверяются автоматически.",
+      "Синхронизация устройств стала стабильнее: обрывы сети и сна больше не оставляют «зависшее» соединение, повторное подключение быстрее."
     ],
     "en": [
-      "Updated the settings look: tabs on the left on desktop, tidy rows instead of large buttons."
+      "Plugin catalog: reviewed plugins can be downloaded right in the app (Settings → Plugins).",
+      "App updates come through GitHub: beta and stable are checked automatically.",
+      "Device sync is more stable: network drops and sleep no longer leave a stuck connection, and reconnecting is faster."
     ]
   }
 }

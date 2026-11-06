@@ -19,7 +19,18 @@ export function peerTransport(options: { host?: string; port?: number; path?: st
       peer.once('error', error => { clearTimeout(timer); reject(new Error((error as { type?: string }).type ?? String(error))); });
     });
     // Signalling may drop (sleep, network change); established data channels keep working.
-    peer.on('disconnected', () => setTimeout(() => { if (!peer.destroyed && peer.disconnected) try { peer.reconnect(); } catch { /* Retried by the engine. */ } }, 3000));
+    // Reconnecting is retried (3 s, 6 s … 30 s) until the server takes the identity back.
+    let healTimer: ReturnType<typeof setTimeout> | undefined, healDelay = 3000;
+    const heal = () => {
+      if (peer.destroyed || !peer.disconnected) return;
+      try { peer.reconnect(); } catch { /* Next round. */ }
+      healTimer = setTimeout(heal, healDelay); healDelay = Math.min(30_000, healDelay * 2);
+    };
+    peer.on('disconnected', () => { clearTimeout(healTimer); healDelay = 3000; healTimer = setTimeout(heal, healDelay); });
+    peer.on('open', () => { clearTimeout(healTimer); healDelay = 3000; });
+    // A destroyed peer (fatal server error) cannot recover: the engine opens a new identity.
+    const closers: (() => void)[] = [];
+    peer.on('close', () => { clearTimeout(healTimer); for (const listener of closers) listener(); });
     const failures = new Map<string, (error: Error) => void>();
     peer.on('error', error => {
       const type = (error as { type?: string }).type;
@@ -29,6 +40,8 @@ export function peerTransport(options: { host?: string; port?: number; path?: st
     const wrap = (connection: import('peerjs').DataConnection): SyncConnection => {
       const early: unknown[] = []; let deliver: ((message: unknown) => void) | undefined;
       connection.on('data', message => { if (deliver) deliver(message); else early.push(message); });
+      // A failed ICE state never comes back; a merely 'disconnected' one may, and the engine's keep-alive judges it.
+      connection.on('iceStateChanged', state => { if (state === 'failed' || state === 'closed') try { connection.close(); } catch { /* Gone. */ } });
       return {
       peer: connection.peer,
       send: message => { try { connection.send(message); } catch { /* Closed. */ } },
@@ -47,8 +60,9 @@ export function peerTransport(options: { host?: string; port?: number; path?: st
         connection.once('open', () => done());
         connection.once('error', error => done(error instanceof Error ? error : new Error(String(error))));
       }),
+      onClose: listener => { closers.push(listener); },
       onConnection: listener => { peer.on('connection', connection => connection.once('open', () => listener(wrap(connection)))); },
-      close: () => { try { peer.destroy(); } catch { /* Already gone. */ } },
+      close: () => { clearTimeout(healTimer); try { peer.destroy(); } catch { /* Already gone. */ } },
     };
     return endpoint;
   };

@@ -12,7 +12,7 @@ import type { Meta, Stamp } from './merge';
  */
 export type Collection = 'likes' | 'playlists' | 'history' | 'settings';
 const COLLECTIONS: readonly Collection[] = ['likes', 'playlists', 'history', 'settings'];
-const STORAGE_KEY = 'ss_sync_v1', LINK_TTL = 5 * 60_000, KEEP_TOMBSTONES = 120 * 86_400_000, BATCH = 80, REDIAL = 60_000;
+const STORAGE_KEY = 'ss_sync_v1', LINK_TTL = 5 * 60_000, KEEP_TOMBSTONES = 120 * 86_400_000, BATCH = 80, REDIAL = 15_000, PING = 15_000, DEAD = 40_000, HANDSHAKE = 10_000, WATCH = 5_000, BACKOFF = 5_000, BACKOFF_MAX = 60_000;
 
 export interface RemoteChanges {
   tracks?: readonly Track[];
@@ -23,7 +23,12 @@ export interface RemoteChanges {
   deviceOnly?(trackId: string): boolean;
 }
 export interface SyncConnection { readonly peer: string; send(message: unknown): void; onMessage(listener: (message: unknown) => void): void; onClose(listener: () => void): void; close(): void }
-export interface SyncEndpoint { connect(target: string): Promise<SyncConnection>; onConnection(listener: (connection: SyncConnection) => void): void; close(): void }
+export interface SyncEndpoint {
+  connect(target: string): Promise<SyncConnection>; onConnection(listener: (connection: SyncConnection) => void): void;
+  /** The signalling identity is gone for good (server dropped it, peer destroyed): the engine opens a new one. */
+  onClose?(listener: () => void): void;
+  close(): void;
+}
 /** Opens a signalling identity (`ss-…`); resolves once the server accepted it. */
 export type OpenEndpoint = (id: string) => Promise<SyncEndpoint>;
 
@@ -43,6 +48,8 @@ export interface SyncApi {
   unlink(deviceId: string): void; leave(): void; rename(name: string): void;
   /** Plays here what another device is playing, from the same position. */
   continueFrom(deviceId: string): void;
+  /** The network or the app came back: redial now instead of waiting for the next retry. */
+  nudge(): void;
   dispose(): void;
 }
 interface Member { name: string; kind: SyncDevice['kind']; t: number; del?: boolean }
@@ -81,10 +88,13 @@ export function createSync(options: Options): SyncApi {
   let persistTimer: ReturnType<typeof setTimeout> | undefined;
   const persist = () => { clearTimeout(persistTimer); persistTimer = setTimeout(() => { try { options.storage?.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch { /* Kept in memory. */ } }, 500); };
   const listeners = new Set<(state: SyncState) => void>();
-  const peers = new Map<string, { connection: SyncConnection; authed: boolean; nonce: string; remote?: string; outgoing: boolean }>();
+  const peers = new Map<string, { connection: SyncConnection; authed: boolean; nonce: string; remote?: string; outgoing: boolean; seen: number; since: number; pinged: number }>();
+  /** Per device: how many dials failed in a row and when the next one is allowed. */
+  const dialing = new Map<string, { fails: number; next: number; busy: boolean }>();
   const presence = new Map<string, NowPlaying>();
   let endpoint: SyncEndpoint | undefined, opening: Promise<void> | undefined, linkEndpoint: SyncEndpoint | undefined, linkTimer: ReturnType<typeof setTimeout> | undefined;
-  let linking: SyncState['linking'], joining: SyncState['joining'], disposed = false, applying = false, redial: ReturnType<typeof setInterval> | undefined;
+  let linking: SyncState['linking'], joining: SyncState['joining'], disposed = false, applying = false, redial: ReturnType<typeof setInterval> | undefined, watcher: ReturnType<typeof setInterval> | undefined;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined, attempts = 0;
   let state = build();
   function build(): SyncState {
     const devices = Object.entries(saved.members).filter(([id, member]) => id !== saved.device.id && !member.del).map(([id, member]) => {
@@ -192,6 +202,7 @@ export function createSync(options: Options): SyncApi {
   async function receive(key: string, raw: unknown) {
     const peer = peers.get(key); if (!peer || !raw || typeof raw !== 'object' || !saved.group) return;
     const message = raw as Message;
+    peer.seen = now();
     if (message.t === 'hello') {
       if (message.group !== saved.group.id || typeof message.id !== 'string' || typeof message.nonce !== 'string' || saved.members[message.id]?.del) { peer.connection.close(); return; }
       peer.remote = message.id;
@@ -207,12 +218,14 @@ export function createSync(options: Options): SyncApi {
         if (keep(value) && !keep(peer)) { peer.connection.close(); peers.delete(key); return; }
         value.connection.close(); peers.delete(other);
       }
-      peer.authed = true; publish();
+      peer.authed = true; dialing.delete(peer.remote); publish();
       peer.connection.send({ t: 'digest', members: saved.members, hashes: hashes() });
       const playing = options.nowPlaying?.(); if (playing) peer.connection.send({ t: 'now', ...playing, track: portable(playing.track), at: now() });
       return;
     }
     if (!peer.authed) return;
+    if (message.t === 'ping') { peer.connection.send({ t: 'pong' }); return; }
+    if (message.t === 'pong') return;
     if (message.t === 'digest') {
       mergeMembers(message.members);
       const theirs = (message.hashes ?? {}) as Record<string, string>;
@@ -234,7 +247,8 @@ export function createSync(options: Options): SyncApi {
   function attach(connection: SyncConnection, outgoing = false) {
     if (!saved.group) { connection.close(); return; }
     const key = `${connection.peer}#${hex(4)}`, nonce = hex(16);
-    peers.set(key, { connection, authed: false, nonce, outgoing });
+    const time = now();
+    peers.set(key, { connection, authed: false, nonce, outgoing, seen: time, since: time, pinged: time });
     // Messages are handled one after another: checking a proof is async, and the digest that
     // follows it must not be looked at before the connection counts as trusted.
     let queue = Promise.resolve();
@@ -243,24 +257,50 @@ export function createSync(options: Options): SyncApi {
     connection.send({ t: 'hello', id: saved.device.id, group: saved.group.id, nonce });
   }
   const peerId = (device: string) => `ss-${saved.group!.id}-${device}`;
-  async function dial() {
+  /** Dials every known device that is not connected; failures back off per device (5 s … 60 s). */
+  function dial(force = false) {
     if (!endpoint || !saved.group) return;
+    const current = endpoint;
     for (const [id, member] of Object.entries(saved.members)) {
       if (id === saved.device.id || member.del || [...peers.values()].some(peer => peer.remote === id)) continue;
-      void endpoint.connect(peerId(id)).then(connection => attach(connection, true)).catch(() => { /* Offline: retried later. */ });
+      const info = dialing.get(id) ?? { fails: 0, next: 0, busy: false }; dialing.set(id, info);
+      if (info.busy || (!force && now() < info.next)) continue;
+      info.busy = true;
+      void current.connect(peerId(id)).then(connection => { info.fails = 0; info.next = 0; if (endpoint === current) attach(connection, true); else connection.close(); })
+        .catch(() => { info.fails++; info.next = now() + Math.min(BACKOFF_MAX, BACKOFF * 2 ** info.fails); /* Offline: retried later. */ })
+        .finally(() => { info.busy = false; });
     }
+  }
+  /** Drops connections that went silent (sleep, lost network) or never finished the handshake, and pings the rest. */
+  function watch() {
+    const time = now(); let dropped = false;
+    for (const [key, peer] of peers) {
+      if (time - peer.seen > DEAD || (!peer.authed && time - peer.since > HANDSHAKE)) {
+        peers.delete(key); if (peer.remote) presence.delete(peer.remote); dropped = true;
+        options.diagnostics?.record('sync', peer.authed ? 'peer.silent' : 'handshake.timeout', {}, 'warn');
+        try { peer.connection.close(); } catch { /* Already gone. */ }
+      } else if (peer.authed && time - peer.pinged >= PING) { peer.pinged = time; peer.connection.send({ t: 'ping' }); }
+    }
+    if (dropped) { publish(); dial(); }
+  }
+  /** Opens a new signalling identity later: 5 s, 10 s, 20 s … 60 s. */
+  function retry() {
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(() => { retryTimer = undefined; opening = undefined; start(); }, Math.min(BACKOFF_MAX, BACKOFF * 2 ** attempts++));
   }
   function start() {
     if (endpoint || opening || !saved.group || disposed) return;
     publish();
     opening = options.open(peerId(saved.device.id)).then(value => {
       if (disposed || !saved.group) { value.close(); return; }
-      endpoint = value; endpoint.onConnection(connection => attach(connection)); void dial();
-      redial = setInterval(() => void dial(), REDIAL);
-    }).catch(error => { options.diagnostics?.record('sync', 'open.failed', { error: String(error) }, 'warn'); setTimeout(() => { opening = undefined; start(); }, 15_000); })
+      endpoint = value; attempts = 0;
+      value.onClose?.(() => { if (endpoint !== value) return; options.diagnostics?.record('sync', 'endpoint.closed', {}, 'warn'); stop(); publish(); retry(); });
+      endpoint.onConnection(connection => attach(connection)); dial();
+      redial = setInterval(() => dial(), REDIAL); watcher = setInterval(watch, WATCH);
+    }).catch(error => { options.diagnostics?.record('sync', 'open.failed', { error: String(error) }, 'warn'); retry(); })
       .finally(() => { if (endpoint) opening = undefined; publish(); });
   }
-  function stop() { clearInterval(redial); for (const peer of peers.values()) peer.connection.close(); peers.clear(); presence.clear(); endpoint?.close(); endpoint = undefined; opening = undefined; }
+  function stop() { clearInterval(redial); clearInterval(watcher); clearTimeout(retryTimer); retryTimer = undefined; dialing.clear(); for (const peer of peers.values()) peer.connection.close(); peers.clear(); presence.clear(); endpoint?.close(); endpoint = undefined; opening = undefined; }
   function forget() { stop(); saved = { device: saved.device, members: {}, meta: {} }; persist(); publish(); }
   function touchSelf() { saved.members[saved.device.id] = { name: saved.device.name, kind: saved.device.kind, t: now() }; }
 
@@ -281,6 +321,14 @@ export function createSync(options: Options): SyncApi {
       for (const peer of authed()) peer.connection.send(playing ? { t: 'now', ...playing, track: portable(playing.track), at: now() } : { t: 'now' });
     }, 800);
   }));
+  function nudge() {
+    if (disposed || !saved.group) return;
+    if (endpoint) { dialing.clear(); dial(true); return; }
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = undefined; opening = undefined; attempts = 0; start(); }
+  }
+  const wake = () => { if (typeof document === 'undefined' || document.visibilityState !== 'hidden') nudge(); };
+  if (typeof globalThis.addEventListener === 'function') { globalThis.addEventListener('online', wake); globalThis.addEventListener('focus', wake); }
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', wake);
   if (saved.group) { restamp(); start(); }
 
   return {
@@ -360,6 +408,7 @@ export function createSync(options: Options): SyncApi {
       const position = playing.position + (playing.playing ? (now() - playing.at) / 1000 : 0);
       options.play?.(playing.track, Math.max(0, Math.min(position, playing.track.duration - 1)), true);
     },
-    dispose() { disposed = true; clearTimeout(changeTimer); clearTimeout(nowTimer); this.stopCode(); stop(); subscriptions.forEach(dispose => dispose()); if (persistTimer) { clearTimeout(persistTimer); try { options.storage?.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch { /* Closing. */ } } listeners.clear(); },
+    nudge,
+    dispose() { disposed = true; if (typeof globalThis.removeEventListener === 'function') { globalThis.removeEventListener('online', wake); globalThis.removeEventListener('focus', wake); } if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', wake); clearTimeout(changeTimer); clearTimeout(nowTimer); this.stopCode(); stop(); subscriptions.forEach(dispose => dispose()); if (persistTimer) { clearTimeout(persistTimer); try { options.storage?.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch { /* Closing. */ } } listeners.clear(); },
   };
 }
