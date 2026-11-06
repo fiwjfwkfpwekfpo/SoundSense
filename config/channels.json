@@ -1,0 +1,12 @@
+{
+  "stable": {
+    "appId": "app.soundsense",
+    "appName": "SoundSense",
+    "debugTools": true
+  },
+  "beta": {
+    "appId": "app.soundsense",
+    "appName": "SoundSense",
+    "debugTools": true
+  }
+}

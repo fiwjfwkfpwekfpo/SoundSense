@@ -1,0 +1,62 @@
+# Dependencies and generated output
+/node_modules/
+/dist/
+/artifacts/
+/coverage/
+*.tsbuildinfo
+/public/SoundSense.png
+
+# Local Android toolchain and generated Capacitor assets
+/.toolchain/
+**/.gradle/
+**/build/
+/android/local.properties
+/android/capacitor-cordova-android-plugins/
+/android/app/src/main/assets/public/
+/android/app/src/main/assets/capacitor*.json
+/android/app/src/main/res/xml/config.xml
+*.apk
+*.aab
+*.ap_
+*.aar
+*.dex
+*.class
+
+# Test output, recordings and profiles. Only curated screenshots in docs/screens/{desktop,mobile} are tracked.
+/docs/screens/*
+!/docs/screens/desktop/
+!/docs/screens/mobile/
+/test-results/
+/playwright-report/
+/blob-report/
+*.cpuprofile
+*.heapprofile
+*.hprof
+*.trace.json
+*.log
+
+# Local credentials and signing keys. Public update keys in src/core stay tracked.
+/.release/
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+**/keystore.properties
+**/key.properties
+**/google-services.json
+
+# Editor and OS state
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

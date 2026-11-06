@@ -1,0 +1,46 @@
+{
+  "appId": "app.soundsense",
+  "productName": "SoundSense",
+  "copyright": "SoundSense",
+  "asar": true,
+  "npmRebuild": false,
+  "nodeGypRebuild": false,
+  "buildDependenciesFromSource": false,
+  "files": [
+    "**/*",
+    "!node_modules{,/**/*}"
+  ],
+  "linux": {
+    "target": [
+      "AppImage"
+    ],
+    "icon": "assets/branding/SoundSense.png",
+    "category": "AudioVideo",
+    "executableName": "soundsense",
+    "synopsis": "Personal music player",
+    "desktop": {
+      "entry": {
+        "Name": "SoundSense",
+        "Comment": "Music player",
+        "Categories": "AudioVideo;Audio;Player;",
+        "StartupWMClass": "soundsense",
+        "Keywords": "music;player;audio;"
+      }
+    }
+  },
+  "publish": null,
+  "toolsets": {
+    "appimage": "1.0.3"
+  },
+  "extraResources": [
+    {
+      "from": ".toolchain/ffmpeg",
+      "to": "ffmpeg",
+      "filter": [
+        "ffmpeg",
+        "LICENSE.md",
+        "COPYING.LGPLv2.1"
+      ]
+    }
+  ]
+}
