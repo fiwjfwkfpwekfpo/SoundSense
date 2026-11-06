@@ -1,0 +1,41 @@
+{
+  "amethyst": {
+    "mainBgCompositedOverBlack": "#0d0c18",
+    "corrections": [
+      {
+        "role": "accentMutedText",
+        "before": "#4a2a9d",
+        "after": "#8c77c0"
+      }
+    ]
+  },
+  "silver": {
+    "mainBgCompositedOverBlack": "#06080b",
+    "corrections": []
+  },
+  "lime": {
+    "mainBgCompositedOverBlack": "#0e1113",
+    "corrections": [
+      {
+        "role": "textMuted",
+        "before": "#7a8a77",
+        "after": "#849381"
+      },
+      {
+        "role": "textOnAccent",
+        "before": "#ffffff",
+        "after": "#525252"
+      }
+    ]
+  },
+  "gold": {
+    "mainBgCompositedOverBlack": "#120b0a",
+    "corrections": [
+      {
+        "role": "danger",
+        "before": "#e0503a",
+        "after": "#e15842"
+      }
+    ]
+  }
+}
