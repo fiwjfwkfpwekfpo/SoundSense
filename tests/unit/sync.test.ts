@@ -60,7 +60,7 @@ function device(name: string, net: ReturnType<typeof network>, tracks: Track[] =
 }
 // HMAC checks run on the real crypto thread pool, outside fake time: give them real turns too.
 const realTick = () => new Promise(resolve => setImmediate(resolve));
-const settle = async (ms = 3000, step = 50) => { for (let spent = 0; spent < ms; spent += step) { await vi.advanceTimersByTimeAsync(step); for (let turn = 0; turn < 25; turn++) await realTick(); } };
+const settle = async (ms = 3000, step = 50) => { for (let spent = 0; spent < ms; spent += step) { await vi.advanceTimersByTimeAsync(step); for (let turn = 0; turn < 80; turn++) await realTick(); } };
 
 
 async function link(a: ReturnType<typeof device>, b: ReturnType<typeof device>) {
