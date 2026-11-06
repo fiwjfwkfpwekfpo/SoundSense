@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { execFile } from 'node:child_process';
@@ -59,7 +59,7 @@ export function integrate({ appImage, iconsFolder, version, env = process.env, r
   for (const { size, file } of iconSizes(iconsFolder)) {
     const target = join(place.icons, `${size}x${size}`, 'apps', `${APP_ID}.png`), source = join(iconsFolder, file);
     if (existsSync(target) && readFileSync(target).equals(readFileSync(source))) continue;
-    mkdirSync(join(place.icons, `${size}x${size}`, 'apps'), { recursive: true }); copyFileSync(source, target); changed.push(target);
+    mkdirSync(join(place.icons, `${size}x${size}`, 'apps'), { recursive: true }); copyFileSync(source, target); chmodSync(target, 0o644); changed.push(target);
   }
   if (changed.length) refresh(place, run);
   return { changed };
