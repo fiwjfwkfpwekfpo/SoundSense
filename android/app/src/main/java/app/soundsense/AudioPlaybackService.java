@@ -181,7 +181,7 @@ public class AudioPlaybackService extends Service {
                 player.setOnErrorListener((failed, what, extra) -> {
                     if (target.player != failed) return true; target.playing = false; target.buffering = false;
                     if (target.pending != null) { target.pending.reject("Audio decoder error " + what + "/" + extra); target.pending = null; }
-                    target.failureReason = "decoder"; target.failureMessage = "MediaPlayer:" + what + "/" + extra; action("error", target); report(target); return true;
+                    target.failureReason = "decoder"; target.failureMessage = "MediaPlayer:" + what + "/" + extra; target.ready = false; if (target == armedTo) disarm("failed"); action("error", target); report(target); return true;
                 });
                 player.setOnInfoListener((p, what, extra) -> { if (what == MediaPlayer.MEDIA_INFO_BUFFERING_START) target.buffering = true; else if (what == MediaPlayer.MEDIA_INFO_BUFFERING_END) target.buffering = false; return false; });
                 player.setOnCompletionListener(complete -> { if (target.player == complete) { target.playing = false; target.ended = true; report(target); endedHandOff(target); } });
@@ -262,6 +262,8 @@ public class AudioPlaybackService extends Service {
                     stream.seekTo(resumeAt); stream.prepare(); stream.setPlayWhenReady(resumePlaying); report(target); return;
                 }
                 PlaybackDiagnostics.record("stream.failed", target.trackId, error.getErrorCodeName(), target.failureReason, status);
+                // A failed player cannot be started: a hand-off must not switch to it.
+                target.ready = false; if (target == armedTo) disarm("failed");
                 if (target.pending != null) { target.pending.reject("Stream error " + error.getErrorCodeName(), status == null ? error.getErrorCodeName() : "HTTP_" + status); target.pending = null; }
                 action("error", target); report(target);
             }
@@ -322,7 +324,11 @@ public class AudioPlaybackService extends Service {
     private double position(Slot target) { try { return target.stream != null ? target.stream.getCurrentPosition() / 1000.0 : target.ready && target.player != null ? target.player.getCurrentPosition() / 1000.0 : 0; } catch (Exception error) { return 0; } }
     private long duration(Slot target) { try { return target.stream != null ? Math.max(0, target.stream.getDuration()) : target.ready && target.player != null ? target.player.getDuration() : 0; } catch (Exception error) { return 0; } }
     private void start(Slot target, double position) {
-        if (!target.ready || target.player == null && target.stream == null) return;
+        if (!target.ready || target.player == null && target.stream == null) {
+            // The WebView believes this slot is prepared (it failed meanwhile): tell it, so it resolves the track again.
+            if (!target.trackId.isEmpty()) { target.failureReason = "network"; target.failureMessage = "slot-not-ready"; target.failureStatus = null; action("error", target); }
+            return;
+        }
         int granted = Build.VERSION.SDK_INT >= 26 ? manager.requestAudioFocus(focus) : manager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
         if (granted != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) { action("pause", target); return; }
         current = target; seek(target, position); volume(target); if (target.stream != null) target.stream.play(); else target.player.start(); target.playing = true; target.ended = false;
@@ -413,7 +419,11 @@ public class AudioPlaybackService extends Service {
         double position = position(armedFrom);
         if (position >= armAt && position < armUntil) handOff(Math.max(.05, Math.min(armDuration, armUntil - position)) / Math.max(.25, armedFrom.rate), false);
     }
-    private void endedHandOff(Slot target) { if (target == armedFrom && handOffReady()) handOff(0, false); }
+    private void endedHandOff(Slot target) {
+        if (target == armedFrom && handOffReady()) { handOff(0, false); return; }
+        // Nothing to switch to: the WebView decides now, by event (its timers are throttled in the background).
+        if (target == current && !target.loop && fadingTo != target) action("ended", target);
+    }
     /** Notification, lock screen and headset "next": switch natively when the next track is ready. */
     private void skipNext() { if (handOffReady()) handOff(.3, true); else action("next", current); }
     private void handOff(double seconds, boolean manual) {

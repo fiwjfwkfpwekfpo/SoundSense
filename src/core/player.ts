@@ -90,6 +90,7 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
     diagnostics?.record('player', 'handoff.received', { trackId: to, kind: event.manual ? 'manual' : seconds > 0 ? 'crossfade' : 'end', latencyMs: latency, hidden });
     active = other(active); prepared = to; nextPrepared = ''; nextPreparing = undefined; buffering++; syncLoop();
     const track = library.getTrack(to); if (track) audio.select?.(active, track);
+    skipped = 0; fix(to); if (processing) audio.processing?.(active, processingFor(to));
     // The crossfade itself runs in the engine; the state carries only the transition for the
     // animations. The next track is prepared right away (the engine waits for the fade to end),
     // so nothing here depends on a WebView timer that Android may throttle in the background.
@@ -102,6 +103,8 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
   // (transitions are switched by the engine; see AudioEngine.arm).
   const hidden = () => typeof document !== 'undefined' && document.hidden;
   const tickEvery = () => hidden() ? 1000 : 80;
+  // Android throttles WebView timers in the background (down to one wake-up a minute): short waits are skipped there.
+  const later = (run: () => void, ms: number) => { if (hidden() && ms <= 1000) queueMicrotask(run); else setTimeout(run, ms); };
   const onVisibility = () => { if (!timer) return; clearInterval(timer); timer = setInterval(tick, tickEvery()); if (!hidden()) tick(); };
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibility);
   const nextIndex = (): number | null => state.currentIndex + 1 < state.queue.length ? state.currentIndex + 1 : state.repeat === 'all' && state.queue.length > 1 ? 0 : null;
@@ -110,7 +113,7 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
     const targets = settings.getSnapshot().waveform === false ? [] : [...new Set([state.trackId, index === null ? undefined : state.queue[index]?.trackId].filter((id): id is string => !!id))];
     library.setWaveformTargets?.(targets);
     // Without the waveform view, loudness is still measured for normalization.
-    if (!targets.length && state.trackId && settings.getSnapshot().normalize !== false && !loudness.has(state.trackId)) { const id = state.trackId; void library.getLoudness?.(id).then(level => { if (Number.isFinite(level)) learnLoudness(id, level!); }).catch(() => {}); }
+    if (!targets.length && settings.getSnapshot().normalize !== false) for (const id of [state.trackId, index === null ? undefined : state.queue[index]?.trackId]) if (id && !loudness.has(id)) void library.getLoudness?.(id).then(level => { if (Number.isFinite(level)) learnLoudness(id, level!); }).catch(() => {});
     for (const [id, unsubscribe] of waveSubscriptions) if (!targets.includes(id)) { unsubscribe(); waveSubscriptions.delete(id); }
     for (const id of waves.keys()) if (!targets.includes(id)) waves.delete(id);
     for (const id of targets) {
@@ -134,10 +137,14 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
     const track = library.getTrack(nextId); if (!track) return;
     if (processing) audio.processing?.(other(active), processingFor(track.id));
     const pending = nextPreparing = { id: nextId, slot: other(active), promise: audio.prepare(other(active), track, 'preload') };
-    try { await pending.promise; if (token === buffering && !disposed) { nextPrepared = nextId; syncArm(); } }
-    catch { /* A failed preload is retried when that track is selected. */ }
+    try { await pending.promise; if (token === buffering && !disposed) { nextPrepared = nextId; preloadFailed = 0; syncArm(); } }
+    catch { if (token === buffering && !disposed) notePreloadFailure(nextId); }
     finally { if (nextPreparing === pending) nextPreparing = undefined; }
   }
+  // A failed preload (network blip, expired link) is tried again a few times while that track is still next.
+  // preloadFailed: when to try again (0 = nothing to retry).
+  let preloadFailed = 0, preloadFailures = { id: '', count: 0 };
+  function notePreloadFailure(id: string) { preloadFailures = preloadFailures.id === id ? { id, count: preloadFailures.count + 1 } : { id, count: 1 }; preloadFailed = preloadFailures.count < 5 ? performance.now() + 8000 : 0; }
   // Loudness normalization: bring every track to about -14 dBFS RMS (cut up to 9 dB, boost up to 6 dB).
   const loudness = new Map<string, number>(), TARGET = -14;
   function normalizationGain(id: string): number {
@@ -145,22 +152,33 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
     const level = loudness.get(id); if (level === undefined) return 1;
     return 10 ** (Math.max(-9, Math.min(6, TARGET - level)) / 20);
   }
-  function processingFor(id: string) { const value = processing!.get(id); const gain = normalizationGain(id); return gain === 1 ? value : { ...value, volume: value.volume * gain }; }
+  // The gain of a track is fixed when it starts. A level measured while the track already plays
+  // is used from its next start: the volume never changes in the middle of a track.
+  let fixed: { id: string; gain: number; at: number } | undefined;
+  function fix(id: string) { fixed = { id, gain: normalizationGain(id), at: performance.now() }; }
+  function processingFor(id: string) { const value = processing!.get(id); const gain = fixed?.id === id ? fixed.gain : normalizationGain(id); return gain === 1 ? value : { ...value, volume: value.volume * gain }; }
   function learnLoudness(id: string, level: number) {
     if (loudness.get(id) === level) return; loudness.set(id, level); if (loudness.size > 200) loudness.delete(loudness.keys().next().value!);
     if (!processing) return;
-    if (state.trackId === id) audio.processing?.(active, processingFor(id));
-    else if (nextPrepared === id || state.crossfade?.from === id) audio.processing?.(other(active), processingFor(id));
+    if (state.trackId === id) {
+      if (fixed?.id === id) { if (state.playing && !state.resolving && performance.now() - fixed.at > 1500) return; fixed = { ...fixed, gain: normalizationGain(id) }; }
+      audio.processing?.(active, processingFor(id));
+    }
+    else if (nextPrepared === id || nextPreparing?.id === id) audio.processing?.(other(active), processingFor(id));
   }
   function syncLoop() { audio.loop?.(active, state.repeat === 'one'); audio.loop?.(other(active), false); }
-  const retries = new Map<string, number>();
-  function retry(id: string, reason: string): boolean {
-    if (!['auth', 'network', 'timeout', 'decoder', 'unavailable'].includes(reason)) return false;
-    const last = retries.get(id) ?? 0; if (Date.now() - last < 60_000) return false;
-    retries.set(id, Date.now()); if (retries.size > 50) retries.delete(retries.keys().next().value!); return true;
+  // Up to three silent retries per track in five minutes; returns the pause before the retry (0 = give up).
+  const retries = new Map<string, { since: number; count: number }>();
+  function retry(id: string, reason: string): number {
+    if (!['auth', 'network', 'timeout', 'decoder', 'unavailable'].includes(reason)) return 0;
+    let entry = retries.get(id); if (!entry || Date.now() - entry.since > 300_000) entry = { since: Date.now(), count: 0 };
+    if (entry.count >= 3) return 0;
+    entry.count++; retries.delete(id); retries.set(id, entry); if (retries.size > 50) retries.delete(retries.keys().next().value!);
+    return [700, 3000, 8000][entry.count - 1]!;
   }
+  let skipped = 0;
   function cancelOverlap() { if (state.crossfade) audio.stop(other(active)); state = { ...state, crossfade: undefined }; overlapEnd = 0; }
-  async function change(index: number, playing = state.playing, manual = true, direction: 1 | -1 = 1, position = 0) {
+  async function change(index: number, playing = state.playing, manual = true, direction: 1 | -1 = 1, position = 0, automatic = false) {
     const token = ++generation, item = state.queue[index], from = state.trackId;
     const reuseNext = !!item && nextPrepared === item.trackId && !state.crossfade;
     const pendingNext = item && nextPreparing?.id === item.trackId && nextPreparing.slot === other(active) && !state.crossfade ? nextPreparing.promise : undefined;
@@ -174,13 +192,15 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
     if (!item) { audio.stop(old); return; }
     const track = library.getTrack(item.trackId)!;
     if (reuseNext || pendingNext) audio.select?.(active, track);
+    fix(track.id);
     if (processing) audio.processing?.(active, processingFor(track.id));
     try {
-      const minimumFade = manual && playing && from ? new Promise(resolve => setTimeout(resolve, 300)) : Promise.resolve();
+      const minimumFade = manual && playing && from ? new Promise<void>(resolve => later(resolve, 300)) : Promise.resolve();
       const selected = active;
       await Promise.all([reuseNext ? Promise.resolve() : pendingNext ? pendingNext.catch(error => { if (token !== generation || disposed) throw error; return audio.prepare(selected, track, 'play'); }) : audio.prepare(active, track, 'play'), minimumFade]);
       if (token !== generation || disposed) return;
-      audio.stop(old); prepared = track.id; syncLoop();
+      audio.stop(old); prepared = track.id; syncLoop(); skipped = 0;
+      if (fixed?.id === track.id) fixed.at = performance.now();
       if (state.playing) { audio.gain(active, 1); audio.start(active, state.position); }
       diagnostics?.record('player', 'prepare.ready', { trackId: track.id, ms: Math.round(performance.now() - started) });
       publish({ ...state, resolving: false }); void prepareNext();
@@ -188,9 +208,14 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
       if (token !== generation || disposed || error instanceof DOMException && error.name === 'AbortError') return;
       const reason = playbackFailureReason(error);
       // Stream links expire and networks blip: one silent retry with a freshly resolved link first.
-      if (retry(track.id, reason)) { diagnostics?.record('player', 'prepare.retry', { trackId: track.id, reason }); audio.stop(old); prepared = ''; setTimeout(() => { if (token === generation && !disposed) void change(index, playing, false, direction, position); }, 700); return; }
+      const wait = retry(track.id, reason);
+      if (wait) { diagnostics?.record('player', 'prepare.retry', { trackId: track.id, reason }); audio.stop(old); prepared = ''; later(() => { if (token === generation && !disposed) void change(index, playing, false, direction, position, automatic); }, wait); return; }
       diagnostics?.record('player', 'prepare.failed', { trackId: track.id, title: track.title, reason, ms: Math.round(performance.now() - started), ...errorDetails(error) }, 'error');
-      audio.stop(old); publish({ ...state, playing: false, resolving: false, notice: { id: ++noticeId, key: `player.error.${reason}` } });
+      audio.stop(old);
+      // The queue moved here by itself and this track cannot be played: go on to the next one (not when the network is down).
+      const following = nextIndex();
+      if (automatic && playing && following !== null && following !== index && skipped < 3 && !['network', 'timeout'].includes(reason)) { skipped++; diagnostics?.record('player', 'skip.unplayable', { trackId: track.id, reason }, 'warn'); state = { ...state, notice: { id: ++noticeId, key: `player.error.${reason}` } }; void change(following, true, false, 1, 0, true); return; }
+      publish({ ...state, playing: false, resolving: false, notice: { id: ++noticeId, key: `player.error.${reason}` } });
     }
   }
   function advance(automatic = false) {
@@ -198,12 +223,17 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
     if (automatic && state.repeat === 'one') { cancelOverlap(); audio.seek(active, 0); audio.start(active, 0); publish({ ...state, position: 0 }); return; }
     const index = nextIndex();
     if (index === null) { audio.pause(active); publish({ ...state, playing: false, position: library.getTrack(state.trackId ?? '')?.duration ?? 0, crossfade: undefined }); }
-    else void change(index, state.playing, !automatic);
+    else void change(index, state.playing, !automatic, 1, 0, automatic);
+  }
+  function ended(track: import('./types').Track) {
+    if (state.sleepTimer?.endOfTrack) { audio.pause(active); publish({ ...state, position: track.duration, playing: false, sleepTimer: undefined }); }
+    else advance(true);
   }
   function beginOverlap(index: number, seconds: number, position: number) {
     const from = state.trackId!, to = state.queue[index]!.trackId, outgoing = active; active = other(active);
     if (audio.crossfade) audio.crossfade(outgoing, active, seconds, position); else { audio.gain(active, 0); audio.start(active, position); }
-    prepared = to; nextPrepared = ''; overlapEnd = performance.now() + seconds * 1000; syncLoop();
+    prepared = to; nextPrepared = ''; overlapEnd = performance.now() + seconds * 1000; syncLoop(); skipped = 0;
+    fix(to); if (processing) audio.processing?.(active, processingFor(to));
     publish({ ...state, currentIndex: index, trackId: to, position, crossfade: { from, to, progress: 0, duration: seconds, fromPosition: state.position, toPosition: position }, transition: { id: ++transitionId, kind: 'crossfade', from, to, duration: seconds * 1000, direction: 1 } });
   }
   function tick() {
@@ -228,6 +258,7 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
     const index = nextIndex(), next = index === null ? undefined : library.getTrack(state.queue[index]!.trackId);
     const rate = clock?.rate ?? 1;
     const plan = next ? crossfadePlan(track, next, rate) : null;
+    if (preloadFailed && now >= preloadFailed) { preloadFailed = 0; void prepareNext(); }
     if (armedKey) {
       // The engine switches by itself. JavaScript steps in only if it clearly did not.
       const late = clock?.ended || position >= track.duration || (plan ? position >= plan.fromEnd + .5 : false);
@@ -237,19 +268,31 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
       armedKey = ''; armOverdue = 0; audio.arm?.(active, other(active), null);
     }
     if (plan && index !== null && nextPrepared === next?.id && position >= plan.fromStart && position < plan.fromEnd && !state.sleepTimer?.endOfTrack) { beginOverlap(index, Math.min(plan.duration, plan.fromEnd - position) / rate, plan.toStart); return; }
-    if (clock?.ended || position >= track.duration) {
-      if (state.sleepTimer?.endOfTrack) { audio.pause(active); publish({ ...state, position: track.duration, playing: false, sleepTimer: undefined }); }
-      else advance(true);
-    } else publish({ ...state, position, ...(state.sleepTimer?.endOfTrack ? { sleepTimer: { ...state.sleepTimer, remaining: track.duration - position } } : {}) });
+    if (clock?.ended || position >= track.duration) ended(track);
+    else publish({ ...state, position, ...(state.sleepTimer?.endOfTrack ? { sleepTimer: { ...state.sleepTimer, remaining: track.duration - position } } : {}) });
   }
   const unsubscribe = audio.subscribe?.(event => {
     if (disposed) return;
     diagnostics?.record('system-player', event.type, { trackId: state.trackId, slot: event.slot, code: event.code, reason: event.reason, message: event.message, index: state.currentIndex, queue: state.queue.length });
-    if (event.type === 'error' && (!event.slot || event.slot === active)) {
+    if (event.type === 'error' && event.slot && event.slot !== active) {
+      // The preloaded next track failed (expired link, network): forget it, so nothing switches to a dead slot.
+      if (state.crossfade) return;
+      const id = nextPrepared || nextPreparing?.id;
+      if (id) { nextPrepared = ''; nextPreparing = undefined; buffering++; audio.stop(other(active)); notePreloadFailure(id); syncArm(); }
+    }
+    else if (event.type === 'error') {
       const id = state.trackId, reason = (event.reason ?? 'decoder') as import('./types').PlaybackFailureReason;
+      if (!state.playing && !state.resolving) return;
       // A 403 from an expired CDN link is reported as "auth"; re-resolve and continue from the same place.
-      if (id && retry(id, reason)) { diagnostics?.record('player', 'stream.retry', { trackId: id, reason, position: state.position }); prepared = ''; void change(state.currentIndex, true, false, 1, state.position); return; }
+      const wait = id ? retry(id, reason) : 0;
+      if (id && wait) { const index = state.currentIndex, position = state.position, token = ++generation; diagnostics?.record('player', 'stream.retry', { trackId: id, reason, position }); prepared = ''; later(() => { if (token === generation && !disposed && state.trackId === id) void change(index, true, false, 1, position); }, wait === 700 ? 0 : wait); return; }
       audio.pause(active); publish({ ...state, playing: false, resolving: false, notice: { id: ++noticeId, key: `player.error.${reason}` } });
+    }
+    // The engine reached the end and had nothing armed: move on now, without waiting for a (throttled) timer.
+    else if (event.type === 'ended') {
+      if (event.slot !== active || !state.playing || state.resolving || state.crossfade || !state.trackId || prepared !== state.trackId || state.repeat === 'one') return;
+      if (armedKey) { armedKey = ''; armOverdue = 0; audio.arm?.(active, other(active), null); }
+      const track = library.getTrack(state.trackId); if (track) ended(track);
     }
     else if (event.type === 'advanced') nativeAdvance(event);
     else if (event.type === 'next') api.next(); else if (event.type === 'previous') api.previous(true);
@@ -295,11 +338,11 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
   const unsubscribeSettings = settings.subscribe(() => {
     updateWaveforms();
     const next = settings.getSnapshot().normalize !== false;
-    if (next !== normalizeSetting) { normalizeSetting = next; if (processing && state.trackId) audio.processing?.(active, processingFor(state.trackId)); }
+    if (next !== normalizeSetting) { normalizeSetting = next; if (fixed) fixed = { ...fixed, gain: normalizationGain(fixed.id) }; if (processing && state.trackId) audio.processing?.(active, processingFor(state.trackId)); }
   });
   const unsubscribeProcessing = processing?.subscribe(() => {
     if (state.trackId) audio.processing?.(active, processingFor(state.trackId));
-    const id = state.crossfade?.from ?? nextPrepared;
+    const id = state.crossfade?.from ?? (nextPrepared || nextPreparing?.id);
     if (id) audio.processing?.(other(active), processingFor(id));
   });
   updateWaveforms();

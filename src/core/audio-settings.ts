@@ -41,8 +41,9 @@ export function createAudioSettings(storage?: Pick<Storage, 'getItem' | 'setItem
   const apply = (values: AudioProcessing, id?: string) => { state = id ? { ...state, tracks: { ...state.tracks, [id]: normalizeAudio(values) } } : { ...state, global: normalizeAudio(values) }; publish(); };
   const api: AudioSettingsApi = {
     getSnapshot: () => state, subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
-    get(id) { return Object.hasOwn(state.tracks, id) ? state.tracks[id]! : state.global; },
-    set(key, value, id) { apply({ ...(id ? api.get(id) : state.global), [key]: value }, id); },
+    // Volume is one for the whole app: a track's own settings keep speed and pitch only.
+    get(id) { return Object.hasOwn(state.tracks, id) ? { ...state.tracks[id]!, volume: state.global.volume } : state.global; },
+    set(key, value, id) { if (key === 'volume') id = undefined; apply({ ...(id ? api.get(id) : state.global), [key]: value }, id); },
     trackOnly(id, enabled) { if (enabled) apply({ ...api.get(id) }, id); else { const tracks = { ...state.tracks }; delete tracks[id]; state = { ...state, tracks }; publish(); } },
     preset(preset, id) { apply({ ...(id ? api.get(id) : state.global), ...preset.values }, id); },
     savePreset(name, id) { const clean = name.replace(/\s+/g, ' ').trim().slice(0, 40); if (!clean) return; const { speed, speedPitch, pitch } = id ? api.get(id) : state.global; state = { ...state, presets: [...state.presets.slice(-39), { id: `preset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: clean, values: { speed, speedPitch, pitch } }] }; publish(); },

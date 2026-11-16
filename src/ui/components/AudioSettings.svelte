@@ -8,7 +8,7 @@
   let name = $state(''), saving = $state(false);
   let id = $derived(ui.track?.id);
   let only = $derived(!!id && !!ui.audioState && Object.hasOwn(ui.audioState.tracks, id));
-  let values = $derived((only && id ? ui.audioState?.tracks[id] : ui.audioState?.global) ?? normalAudio);
+  let values = $derived({ ...((only && id ? ui.audioState?.tracks[id] : ui.audioState?.global) ?? normalAudio), volume: ui.audioState?.global.volume ?? 1 });
   const sliders: { key: keyof AudioProcessing; min: number; max: number; step: number }[] = [
     { key: 'speed', min: .5, max: 2, step: .01 }, { key: 'speedPitch', min: .5, max: 2, step: .01 }, { key: 'pitch', min: -12, max: 12, step: 1 }, { key: 'volume', min: 0, max: 2, step: .01 },
   ];
