@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ready, openPlayer } from './helpers';
+import { ready, openPlayer, goTab } from './helpers';
 test('preset chips scroll with the mouse wheel and by dragging, and a drag does not press a chip', async ({ page }) => {
   await ready(page); await openPlayer(page);
   await page.getByTestId('player').getByRole('button', { name: 'Звук', exact: true }).click();
@@ -20,4 +20,12 @@ test('collapsing the player after the lyrics leaves the player, and active toggl
   await page.evaluate(() => window.dispatchEvent(new Event('app:back'))); await expect(page.getByTestId('player')).toBeVisible();
   await page.getByTestId('player').getByRole('button', { name: 'Свернуть плеер' }).click();
   await expect(page.getByTestId('player')).toHaveCount(0); await expect(page.getByRole('navigation')).toBeVisible();
+});
+test('the playlist shuffle button shows whether this list plays shuffled', async ({ page }) => {
+  await ready(page); await goTab(page, 'Мне нравится');
+  const button = page.locator('main').getByRole('button', { name: 'Перемешать', exact: true });
+  await expect(button).toHaveAttribute('aria-pressed', 'false'); const off = await button.evaluate(node => getComputedStyle(node).color);
+  await button.click(); await expect(button).toHaveAttribute('aria-pressed', 'true');
+  expect(await button.evaluate(node => getComputedStyle(node).color)).not.toBe(off);
+  await button.click(); await expect(button).toHaveAttribute('aria-pressed', 'false');
 });
