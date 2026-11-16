@@ -7,14 +7,17 @@ import { extname, isAbsolute, normalize, relative } from 'node:path';
  * ss-media:// — how the window reads audio and covers it cannot fetch by itself:
  *   ss-media://file/?p=/abs/path.flac      a local audio file (with Range, so seeking works)
  *   ss-media://stream/?u=https://…&h=json   a remote stream that needs request headers
- *                                           (User-Agent etc.), which <audio> cannot send
+ *                                           (User-Agent etc.), which <audio> cannot send;
+ *                                           with &id=<track> it is also kept on disk (music-cache.mjs)
+ *   ss-media://cache/?id=<track>            a complete track from the cache
+ *   ss-media://hls/<name>/index.m3u8        a cached HLS track (playlist and segments)
  * Local reads are limited to audio and image types; images only from the app's own folders.
  */
 const AUDIO = /^\.(flac|mp3|ogg|oga|opus|m4a|mp4|aac|wav|aif|aiff|alac|wma)$/i, IMAGE = /^\.(jpe?g|png|webp)$/i;
 const TYPES = { '.flac': 'audio/flac', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.opus': 'audio/ogg', '.m4a': 'audio/mp4', '.mp4': 'audio/mp4', '.aac': 'audio/aac', '.wav': 'audio/wav', '.aif': 'audio/aiff', '.aiff': 'audio/aiff', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 const inside = (root, path) => { const rel = relative(root, path); return !!rel && !rel.startsWith('..') && !isAbsolute(rel); };
 const FORWARD = ['range', 'accept', 'if-range'];
-export function mediaHandler(paths) {
+export function mediaHandler(paths, cache) {
   async function file(request, path) {
     path = normalize(path);
     const extension = extname(path);
@@ -46,7 +49,14 @@ export function mediaHandler(paths) {
   return async request => {
     const url = new URL(request.url);
     if (url.hostname === 'file') return file(request, url.searchParams.get('p') ?? '');
-    if (url.hostname === 'stream') return stream(request, url.searchParams.get('u') ?? '', url.searchParams.get('h'));
+    if (url.hostname === 'stream') {
+      const target = url.searchParams.get('u') ?? '', extra = url.searchParams.get('h'), id = url.searchParams.get('id');
+      if (!id || !cache || !/^https:\/\//.test(target)) return stream(request, target, extra);
+      let headers = {}; try { headers = extra ? JSON.parse(extra) : {}; } catch { return new Response('Bad request', { status: 400 }); }
+      return cache.stream(request, id, target, headers, () => stream(request, target, extra));
+    }
+    if (url.hostname === 'cache' && cache) return cache.serve(request, url.searchParams.get('id') ?? '');
+    if (url.hostname === 'hls' && cache) return cache.serveHls(request, url.pathname);
     return new Response('Not found', { status: 404 });
   };
 }

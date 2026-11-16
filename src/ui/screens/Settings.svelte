@@ -15,6 +15,7 @@
   import Icon from '../icons/Icon.svelte';
   import type { IconName } from '../icons/Icon.svelte';
   import type { PluginSettingTab } from '../../core/plugins/types';
+  import { isDesktop } from '../../platform/desktop';
   const ui = useModel();
   let developer = $state(false); let taps = 0;
   // Tabs: each built-in settings section belongs to one tab; plugins pick a tab for their settings.
@@ -26,7 +27,7 @@
   let tab = $state<PluginSettingTab>((ui.nav.view.settingsTab as PluginSettingTab) ?? 'appearance');
   $effect(() => { ui.nav.view.settingsTab = tab; });
   let sections = $derived(ui.contributions('settingsSections').filter(section => ui.settingDefinitions.some(definition => definition.section === section.section && !definition.hidden)));
-  let definitions = $derived(ui.settingDefinitions.filter(definition => (definition.key !== 'waveCacheLimit' || !!ui.api.waveCache) && (definition.section !== 'offline' || !!ui.api.offline)));
+  let definitions = $derived(ui.settingDefinitions.filter(definition => (definition.key !== 'waveCacheLimit' || !!ui.api.waveCache) && (definition.section !== 'offline' || !!ui.api.offline) && (definition.key !== 'wifiOnly' || !isDesktop())));
   // Items shown for the first time on this device are marked new (see new-badges.ts).
   $effect.pre(() => { noteFeatures([...definitions.filter(definition => !definition.hidden).map(definition => definition.key), ...(ui.api.plugins ? ['screen.plugins'] : []), ...(ui.api.releaseChannel ? ['screen.releaseChannel'] : [])]); });
   let waveStats = $state<{ bytes: number; count: number } | null>(null), clearingWaves = $state(false);

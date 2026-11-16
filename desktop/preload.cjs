@@ -22,6 +22,11 @@ contextBridge.exposeInMainWorld('soundsenseDesktop', {
     stats: () => call('waves:stats'), clear: () => call('waves:clear'), setLimit: bytes => call('waves:limit', bytes),
     onProgress(listener) { const handler = (_event, value) => listener(value); ipcRenderer.on('waves:progress', handler); return () => ipcRenderer.removeListener('waves:progress', handler); },
   },
+  cache: {
+    snapshot: () => call('cache:snapshot'), configure: options => call('cache:configure', options), download: options => call('cache:download', options),
+    remove: options => call('cache:remove', options), clear: () => call('cache:clear'), setPreferred: ids => call('cache:preferred', ids), source: id => call('cache:source', id),
+    onChange(listener) { const handler = (_event, value) => listener(value); ipcRenderer.on('cache:change', handler); return () => ipcRenderer.removeListener('cache:change', handler); },
+  },
   updates: {
     /** True only when running from an AppImage that can replace itself. */
     available: ipcRenderer.sendSync('updates:available') === true,

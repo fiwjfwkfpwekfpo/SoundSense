@@ -11,6 +11,7 @@ import { createHttp } from './http.mjs';
 import { createFiles } from './files.mjs';
 import { mediaHandler } from './media.mjs';
 import { createWaveforms } from './waveform.mjs';
+import { createMusicCache } from './music-cache.mjs';
 import { integrate, unintegrate } from './integration.mjs';
 import { linkCaches } from './caches.mjs';
 import { createUpdater } from './updater.mjs';
@@ -68,7 +69,9 @@ const state = createStateStore(paths), secrets = createSecrets(paths), http = cr
 let window;
 const files = createFiles(paths, () => window);
 const updater = createUpdater({ cache: paths.cache, appImage: process.platform === 'linux' ? process.env.APPIMAGE : undefined, fetch: (url, options) => net.fetch(url, options), onProgress: value => window?.webContents.send('updates:progress', value), quit: () => app.quit() });
-const waves = createWaveforms(paths, value => window?.webContents.send('waves:progress', value));
+// Listened and downloaded tracks: <cache>/tracks (desktop/music-cache.mjs).
+const music = createMusicCache({ directory: join(paths.cache, 'tracks'), fetch: (url, options) => net.fetch(url, options), onChange: value => window?.webContents.send('cache:change', value) });
+const waves = createWaveforms(paths, value => window?.webContents.send('waves:progress', value), music);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.txt': 'text/plain; charset=utf-8', '.ico': 'image/x-icon' };
 
 /** app://soundsense/… serves the built web app; unknown paths fall back to index.html. */
@@ -117,7 +120,14 @@ function registerIpc() {
   ipcMain.on('app:hostname', event => { event.returnValue = trusted(event.senderFrame) ? hostname().slice(0, 40) : ''; });
   handle('waves:read', options => waves.readWaveform(options ?? {}));
   handle('waves:readStream', options => waves.readStreamWaveform(options ?? {}));
-  handle('waves:register', (id, uri, headers) => waves.registerStream(id, uri, headers));
+  handle('waves:register', (id, uri, headers) => { waves.registerStream(id, uri, headers); void music.note(id, uri, headers).catch(() => {}); });
+  handle('cache:snapshot', () => music.snapshot());
+  handle('cache:configure', options => music.configure(options ?? {}));
+  handle('cache:download', options => music.download(options ?? {}));
+  handle('cache:remove', options => music.remove(options ?? {}));
+  handle('cache:clear', () => music.clear());
+  handle('cache:preferred', ids => music.setPreferred(ids));
+  handle('cache:source', id => music.source(id));
   handle('waves:cancel', key => waves.cancel(key));
   handle('waves:stats', () => waves.stats());
   handle('waves:clear', () => waves.clear());
@@ -170,7 +180,7 @@ function configureSession() {
     callback({ responseHeaders: headers });
   });
   protocol.handle('app', serveApp);
-  protocol.handle('ss-media', mediaHandler(paths));
+  protocol.handle('ss-media', mediaHandler(paths, music));
 }
 
 app.on('second-instance', () => { if (!window) return; if (window.isMinimized()) window.restore(); window.show(); window.focus(); });
