@@ -3,11 +3,11 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { strToU8, zipSync } from 'fflate';
 import { projectRoot } from '../../config/playwright/ui.config';
-import { actualApp, goTab } from './helpers';
+import { actualApp, goTab, settingsTab } from './helpers';
 
 async function openPlugins(page: import('@playwright/test').Page) {
   await actualApp(page);
-  await goTab(page, 'Настройки');
+  await goTab(page, 'Настройки'); await settingsTab(page, 'Приложение');
   await page.getByRole('button', { name: /^Плагины/ }).click();
 }
 

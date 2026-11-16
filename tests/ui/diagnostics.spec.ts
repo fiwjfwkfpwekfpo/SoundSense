@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
-import { actualApp, goTab } from './helpers';
+import { actualApp, goTab, settingsTab } from './helpers';
 
 test('a full playback journal downloads above the old 100 KB palette limit', async ({ page }) => {
   await page.addInitScript(() => {
@@ -9,7 +9,7 @@ test('a full playback journal downloads above the old 100 KB palette limit', asy
       data: { trackId: `ya-${id}`, message: 'Подробная запись воспроизведения. '.repeat(20), status: 404 },
     }))));
   });
-  await actualApp(page); await goTab(page, 'Настройки');
+  await actualApp(page); await goTab(page, 'Настройки'); await settingsTab(page, 'Приложение');
   await page.getByRole('button', { name: 'Диагностика и журнал', exact: true }).click();
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Сохранить журнал', exact: true }).click();

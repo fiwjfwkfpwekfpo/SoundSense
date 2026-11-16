@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ready, goTab, openPlayer, choose, chooseAppearance } from './helpers';
+import { ready, goTab, openPlayer, choose, chooseAppearance, settingsTab } from './helpers';
 test.beforeEach(async ({ page }) => { await ready(page); });
 test('all screens stay local and run without JavaScript errors', async ({ page }) => {
   const errors: string[] = []; const remote: string[] = [];
@@ -27,8 +27,8 @@ test('theme, language and playback preferences persist and change immediately', 
   await goTab(page, 'Настройки'); await chooseAppearance(page, 'Цвета', 'Светлая фикстура');
   await expect(page.locator('html')).toHaveAttribute('data-color-scheme', 'light');
   expect(await page.locator('html').evaluate(element => element.style.getPropertyValue('--palette-mainBg').trim())).toBe('#f6f2ea');
-  await page.getByRole('switch', { name: 'Вибрация', exact: true }).click();
-  await choose(page, 'Язык', 'English');
+  await settingsTab(page, 'Плеер'); await page.getByRole('switch', { name: 'Вибрация', exact: true }).click();
+  await settingsTab(page, 'Оформление'); await choose(page, 'Язык', 'English');
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await page.reload(); await expect(page.locator('html')).toHaveAttribute('data-color-scheme', 'light');
   await expect(page.getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
@@ -40,7 +40,7 @@ test('waveform supports seek, playback, three repeat modes and progress fallback
   await page.getByRole('button', { name: 'Воспроизвести', exact: true }).click(); await expect(page.getByRole('button', { name: 'Пауза', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Повтор выключен' }).click(); await page.getByRole('button', { name: 'Повтор всей очереди' }).click(); await expect(page.getByRole('button', { name: 'Повтор одного трека' })).toBeVisible();
   await slider.focus(); await page.keyboard.press('Home'); await expect(slider).toHaveAttribute('aria-valuenow', '0');
-  await goTab(page, 'Настройки'); await page.getByRole('switch', { name: 'Волна вместо прогресс-бара' }).click(); await openPlayer(page);
+  await goTab(page, 'Настройки'); await settingsTab(page, 'Плеер'); await page.getByRole('switch', { name: 'Волна вместо прогресс-бара' }).click(); await openPlayer(page);
   await expect(page.getByTestId('waveform')).toBeVisible(); await expect(page.getByTestId('waveform').locator('.times span')).toHaveCount(2);
 });
 test('browser back closes sheets before the full-screen player', async ({ page }) => {

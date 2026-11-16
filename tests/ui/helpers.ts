@@ -16,6 +16,11 @@ export async function goTab(page: Page, name: string) {
     await card.click();
   }
 }
+/** Settings are split into tabs; settings tests open the tab that holds what they need. */
+export async function settingsTab(page: Page, name: string) {
+  await page.getByRole('tablist').getByRole('tab', { name, exact: true }).click();
+  await expect(page.getByRole('tab', { name, exact: true })).toHaveAttribute('aria-selected', 'true');
+}
 export async function openPlayer(page: Page) {
   await page.getByTestId('mini-player').getByRole('button', { name: 'Открыть плеер' }).click();
   await expect(page.getByTestId('player')).toBeVisible();

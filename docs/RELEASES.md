@@ -35,7 +35,7 @@ npm run test:channels
 
 ## Публикация
 
-Прежде чем публиковать следующую версию, увеличить `versionCode` и обновить `version` / release notes. Опубликованный APK с тем же именем и другим SHA-256 не заменяется.
+Прежде чем публиковать следующую версию, увеличить `versionCode` и обновить `version` / release notes. Затем `node scripts/release/update-fixture.mjs` — подписанный manifest текущей версии для `tests/ui/updates.spec.ts`. Опубликованный APK с тем же именем и другим SHA-256 не заменяется.
 
 ```sh
 npm run release:stable -- --dry-run
