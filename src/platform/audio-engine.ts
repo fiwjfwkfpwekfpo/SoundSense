@@ -110,7 +110,7 @@ function webEngine(resolve: Resolve): AudioEngine {
       if (token !== target.generation) throw new DOMException('Superseded', 'AbortError');
       target.hls?.destroy(); target.hls = undefined; target.media.pause(); target.waiting = true;
       // Desktop: streams that need headers (User-Agent…) go through ss-media://stream, which <audio> can read.
-      const url = desktop && headers ? desktopMediaUrl(uri, headers) : await mediaUrl(uri);
+      const url = desktop && /^https:/.test(uri) ? desktopMediaUrl(uri, headers, desktop.cache ? track.id : undefined) : await mediaUrl(uri);
       if (token !== target.generation) throw new DOMException('Superseded', 'AbortError');
       if (/\.m3u8(?:\?|$)/i.test(url) && !target.media.canPlayType('application/vnd.apple.mpegurl')) {
         const { default: Hls } = await import('hls.js'); if (token !== target.generation) throw new DOMException('Superseded', 'AbortError');

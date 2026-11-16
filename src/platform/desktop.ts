@@ -1,5 +1,6 @@
 import type { LocalAudioFile, LocalAudioMetadata, LocalFileSelection } from '../core/local';
 import type { Waveform } from '../core/types';
+import type { OfflineState } from '../core/offline';
 interface WaveRequest { duration: number; loudness?: boolean; rhythm?: boolean }
 /** Errors cross IPC as values: NOT_READY (stream not prepared yet), UNAVAILABLE (no ffmpeg), CANCELLED. */
 type WaveReply = Waveform | { error: 'NOT_READY' | 'UNAVAILABLE' | 'CANCELLED' };
@@ -28,6 +29,13 @@ export interface DesktopBridge {
     stats(): Promise<{ bytes: number; count: number; limit: number }>; clear(): Promise<void>; setLimit(bytes: number): Promise<void>;
     onProgress(listener: (value: { uri: string; samples: readonly number[]; progress: number; status: 'building' | 'ready' | 'deferred' }) => void): () => void;
   };
+  /** Listened and downloaded tracks on disk (desktop/music-cache.mjs). Absent in the browser stand-in. */
+  cache?: {
+    snapshot(): Promise<OfflineState>; configure(options: { automatic: boolean; wifiOnly: boolean; limitMb: number }): Promise<void>;
+    download(options: { id: string; uri: string; headers?: Readonly<Record<string, string>> }): Promise<void>; remove(options: { id: string }): Promise<void>; clear(): Promise<void>;
+    setPreferred(ids: readonly string[]): Promise<void>; source(id: string): Promise<{ available: boolean; uri?: string }>;
+    onChange(listener: (value: OfflineState) => void): () => void;
+  };
   /** Self-update of the AppImage (desktop/updater.mjs). `available` is false outside an AppImage. */
   updates: {
     available: boolean;
@@ -42,12 +50,13 @@ export const desktop: DesktopBridge | undefined = (globalThis as { soundsenseDes
 export const isDesktop = (): boolean => !!desktop;
 
 /** Local files and app covers are file: URIs; the window reads them through ss-media://. */
-export function desktopMediaUrl(uri: string, headers?: Readonly<Record<string, string>>): string {
+export function desktopMediaUrl(uri: string, headers?: Readonly<Record<string, string>>, id?: string): string {
   if (uri.startsWith('file:')) {
     const path = decodeURIComponent(new URL(uri).pathname).replace(/^\/([A-Za-z]:\/)/, '$1');
     return `ss-media://file/?p=${encodeURIComponent(path)}`;
   }
-  if (headers && Object.keys(headers).length && /^https:/.test(uri) && !/\.m3u8(?:\?|$)/i.test(uri)) return `ss-media://stream/?u=${encodeURIComponent(uri)}&h=${encodeURIComponent(JSON.stringify(headers))}`;
+  // With a track id the stream is also kept in the cache while it plays.
+  if ((id || headers && Object.keys(headers).length) && /^https:/.test(uri) && !/\.m3u8(?:\?|$)/i.test(uri)) return `ss-media://stream/?u=${encodeURIComponent(uri)}${headers && Object.keys(headers).length ? `&h=${encodeURIComponent(JSON.stringify(headers))}` : ''}${id ? `&id=${encodeURIComponent(id)}` : ''}`;
   return uri;
 }
 

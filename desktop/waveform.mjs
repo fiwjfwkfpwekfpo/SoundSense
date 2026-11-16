@@ -34,7 +34,7 @@ async function* streamBytes(input, headers, signal) {
   const segments = text.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#'));
   for (const part of [...(init ? [init] : []), ...segments]) { const response = await get(new URL(part, url).href); for await (const chunk of response.body) yield Buffer.from(chunk); }
 }
-export function createWaveforms(paths, emit) {
+export function createWaveforms(paths, emit, music) {
   const directory = join(paths.data, 'waveforms'), limitFile = join(directory, 'limit.json');
   const jobs = new Map(), streams = new Map();
   let available, limit = 32 * 1024 * 1024, running = 0; const waiting = [];
@@ -69,7 +69,7 @@ export function createWaveforms(paths, emit) {
     return Buffer.from(level.map(value => Math.max(0, Math.min(255, Math.round(value / top * 255)))));
   }
   /** One decode. `input` is a file path or an https URL with optional request headers. */
-  function decode(key, input, headers, duration, cancelled) {
+  function decode(key, input, headers, duration, cancelled, local) {
     return new Promise((resolve, reject) => {
       // Streams are fetched here and piped in: the bundled ffmpeg has no network code at all.
       const remote = /^https:/.test(input);
@@ -79,7 +79,9 @@ export function createWaveforms(paths, emit) {
       if (remote) {
         child.stdin.on('error', () => {}); // ffmpeg may stop reading early (cancel, broken file).
         void (async () => {
-          try { for await (const chunk of streamBytes(input, headers, feed.signal)) { if (!child.stdin.write(chunk)) await new Promise(done => child.stdin.once('drain', done)); } }
+          const stopped = new Promise(done => feed.signal.addEventListener('abort', done, { once: true }));
+          // The track's own download (or its cached copy) is read when there is one; otherwise the stream is fetched here.
+          try { const source = await local?.(feed.signal).catch(() => null) ?? streamBytes(input, headers, feed.signal); for await (const chunk of source) { if (feed.signal.aborted) break; if (!child.stdin.write(chunk)) await Promise.race([new Promise(done => child.stdin.once('drain', done)), stopped]); if (feed.signal.aborted) break; } }
           catch { /* ffmpeg ends with what it got, or fails below. */ }
           finally { child.stdin.end(); }
         })();
@@ -124,7 +126,7 @@ export function createWaveforms(paths, emit) {
   }
   async function slot() { if (running < 2) { running++; return; } await new Promise(resolve => waiting.push(resolve)); running++; }
   function release() { running--; waiting.shift()?.(); }
-  async function analyse(key, input, headers, options) {
+  async function analyse(key, input, headers, options, local) {
     const duration = Number(options.duration); if (!(duration > 0)) throw new Error('Unknown duration');
     const previous = jobs.get(key); if (previous) { previous.value = true; previous.kill?.(); }
     const cancelled = { value: false }; jobs.set(key, cancelled);
@@ -135,7 +137,7 @@ export function createWaveforms(paths, emit) {
       await slot();
       try {
         if (cancelled.value) return { error: 'CANCELLED' };
-        const started = Date.now(), result = await decode(key, input, headers, duration, cancelled);
+        const started = Date.now(), result = await decode(key, input, headers, duration, cancelled, local);
         await writeCache(key, result.values, result.loudness, result.rhythm);
         const value = { uri: key, samples: result.values, progress: 1, status: 'ready', loudness: result.loudness, rhythm: result.rhythm.toString('base64'), computeMs: Date.now() - started };
         emit(value); return value;
@@ -150,8 +152,14 @@ export function createWaveforms(paths, emit) {
     },
     readStreamWaveform(options) {
       const id = String(options.id), stream = streams.get(id);
-      if (!stream) return readCache(`stream:${id}`).then(cached => cached && (!options.loudness || 'loudness' in cached) && (!options.rhythm || 'rhythm' in cached) ? cached : { error: 'NOT_READY' });
-      return analyse(`stream:${id}`, stream.uri, stream.headers, options);
+      const local = music ? signal => music.bytes(id, signal) : undefined;
+      if (!stream) return readCache(`stream:${id}`).then(async cached => {
+        if (cached && (!options.loudness || 'loudness' in cached) && (!options.rhythm || 'rhythm' in cached)) return cached;
+        // A track played from the cache has no stream address: decode the cached copy.
+        const source = await music?.source(id).catch(() => undefined);
+        return source?.available ? analyse(`stream:${id}`, 'https://cache.invalid/', undefined, options, local) : { error: 'NOT_READY' };
+      });
+      return analyse(`stream:${id}`, stream.uri, stream.headers, options, local);
     },
     /** The player registers the stream address when it prepares a track (as MusicCache.streamUri on Android). */
     registerStream(id, uri, headers) { if (typeof id !== 'string' || !/^https:/.test(String(uri))) return; streams.set(id, { uri: String(uri), headers }); if (streams.size > 32) streams.delete(streams.keys().next().value); },
