@@ -10,7 +10,7 @@ export function playbackFailureReason(error: unknown): PlaybackFailureReason {
 export type AudioSlot = 'a' | 'b';
 export interface AudioStream { uri: string; headers?: Readonly<Record<string, string>> }
 export interface AudioEvent {
-  type: 'error' | 'pause' | 'play' | 'next' | 'previous' | 'like' | 'seek' | 'advanced'; slot?: AudioSlot; liked?: boolean; position?: number; reason?: PlaybackFailureReason; message?: string; code?: string; status?: number;
+  type: 'error' | 'pause' | 'play' | 'next' | 'previous' | 'like' | 'seek' | 'advanced' | 'ended'; slot?: AudioSlot; liked?: boolean; position?: number; reason?: PlaybackFailureReason; message?: string; code?: string; status?: number;
   /** "advanced": the engine switched from `slot` to `to` on its own (armed hand-off). */
   to?: AudioSlot; trackId?: string; seconds?: number; manual?: boolean; at?: number;
 }
