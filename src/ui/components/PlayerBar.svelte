@@ -3,10 +3,10 @@
   import { waveformProgress } from '../appearance/motion/runtime';
   import Cover from './Cover.svelte';
   import Icon from '../icons/Icon.svelte';
+  import VolumeControl from './VolumeControl.svelte';
   import { formatTime } from '../../core/format';
   // Wide desktop window: the player as a bar under the content (like Yandex Music / Spotify).
   const ui = useModel();
-  let lastVolume = 1;
   function seekAt(event: PointerEvent) {
     const target = event.currentTarget as HTMLElement, box = target.getBoundingClientRect();
     if (!ui.track?.duration) return;
@@ -37,7 +37,7 @@
   <div class="side">
     <button class="icon-button" aria-label={ui.t('lyrics.title')} title={ui.t('lyrics.title')} onclick={() => ui.nav.open('lyrics')}><Icon name="lyrics" size="s" /></button>
     <button class="icon-button" aria-label={ui.t('queue.title')} title={ui.t('queue.title')} onclick={() => ui.nav.open('queue')}><Icon name="queue" size="s" /></button>
-    {#if ui.api.audioSettings}{@const volume = ui.audioState?.global.volume ?? 1}<label class="volume" title={`${Math.round(volume * 100)}%`}><button class="icon-button" aria-label={ui.t('audio.volume')} onclick={() => { const value = volume > 0 ? 0 : (lastVolume || 1); if (volume > 0) lastVolume = volume; ui.api.audioSettings?.set('volume', value); }}><Icon name="volume" size="s" /></button><input type="range" min="0" max="1" step="0.01" aria-label={ui.t('audio.volume')} value={Math.min(1, volume)} oninput={event => ui.api.audioSettings?.set('volume', Number(event.currentTarget.value))} style:--fill={`${Math.min(1, volume) * 100}%`} /></label>{/if}
+    {#if ui.api.audioSettings}<VolumeControl />{/if}
     {#if ui.api.capabilities?.soundProcessing !== false}<button class="icon-button" aria-label={ui.t('player.sound')} title={ui.t('player.sound')} onclick={() => ui.nav.sheet({ kind: 'sound' })}><Icon name="sliders" size="s" /></button>{/if}
   </div>
 </div>
@@ -63,10 +63,5 @@
   .played i { display: block; height: 100%; width: 100%; background: var(--color-text); transform-origin: left; }
   .side { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-1); min-width: 0; }
   .side > * { flex-shrink: 0; }
-  /* Narrow bar: the volume keeps only its button. */
-  @media (max-width: 1180px) { .volume input { display: none; } .volume { margin-right: 0; } }
   @media (max-width: 1000px) { .bar { grid-template-columns: minmax(0, 1fr) auto auto; } .time { display: none; } }
-  .volume { display: flex; align-items: center; gap: var(--space-1); margin-right: var(--space-2); }
-  .volume input { width: calc(var(--space-8) * 2.5); height: var(--space-1); appearance: none; border-radius: var(--radius-full); background: linear-gradient(90deg, var(--color-text) var(--fill), var(--color-surface-3) var(--fill)); cursor: pointer; }
-  .volume input::-webkit-slider-thumb { appearance: none; width: var(--space-3); height: var(--space-3); border-radius: var(--radius-full); background: var(--color-text); }
 </style>

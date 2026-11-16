@@ -17,7 +17,10 @@ export class NavigationStack<S> {
   }
   switchTab(activeTab: Tab) { this.state = { ...this.state, activeTab, overlays: [], sheet: null, sheets: [] }; }
   root() { const tab = this.state.activeTab; this.state = { ...this.state, tabs: { ...this.state.tabs, [tab]: this.state.tabs[tab].slice(0, 1) }, overlays: [], sheet: null, sheets: [] }; }
-  open(overlay: Overlay) { if (this.state.overlays.at(-1) !== overlay) this.state = { ...this.state, overlays: [...this.state.overlays, overlay], sheet: null, sheets: [] }; }
+  /** An overlay is in the stack once: opening one that is already below returns to it. */
+  open(overlay: Overlay) { const at = this.state.overlays.indexOf(overlay); if (at !== this.state.overlays.length - 1 || at < 0) this.state = { ...this.state, overlays: at >= 0 ? this.state.overlays.slice(0, at + 1) : [...this.state.overlays, overlay], sheet: null, sheets: [] }; }
+  /** Collapse the player: closes every overlay at once, whatever was opened on the way. */
+  collapse() { this.state = { ...this.state, overlays: [], sheet: null, sheets: [] }; }
   sheet(sheet: S) { this.state = { ...this.state, sheets: this.state.sheet ? [...this.state.sheets, this.state.sheet] : this.state.sheets, sheet }; }
   replaceSheet(sheet: S) { this.state = { ...this.state, sheet }; }
   back(): boolean {

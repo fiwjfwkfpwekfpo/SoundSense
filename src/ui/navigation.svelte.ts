@@ -36,6 +36,7 @@ export class Navigation {
     } else { this.history.switchTab(tab); this.publish(); }
   }
   open(overlay: Overlay) { this.history.open(overlay); this.publish(); }
+  collapse() { this.capture(); this.history.collapse(); this.publish(); }
   sheet(sheet: SheetState) { this.history.sheet(sheet); this.publish(); }
   replaceSheet(sheet: SheetState) { this.history.replaceSheet(sheet); this.publish(); }
   dismissSheet() { if (this.state.sheet) this.back(); }

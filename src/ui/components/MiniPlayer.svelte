@@ -1,4 +1,6 @@
 <script lang="ts">
+  import VolumeControl from './VolumeControl.svelte';
+  import { isDesktop } from '../../platform/desktop';
   import { swapCard, cancelCardSwap } from '../appearance/motion/card-swipe';
   import { useModel } from '../context.svelte';
   import { miniDrop, rememberMiniPlayer, waveformProgress } from '../appearance/motion/runtime';
@@ -42,6 +44,8 @@
   }
   function cancel() { gesture = null; if (card) card.style.transform = ''; }
 
+  // Desktop, narrow window: the volume lives here (a phone has its own keys).
+  const desktopVolume = isDesktop() && !!ui.api.audioSettings;
 </script>
 {#if ui.track && ui.player}
   <div class="mini-viewport" use:miniDrop role="group" aria-label={ui.t('player.title')} onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={cancel}><div bind:this={card} class="mini" use:rememberMiniPlayer role="group" aria-label={ui.t('player.title')} data-testid="mini-player" onclickcapture={event => { if (suppressClick && event.detail !== 0) { event.preventDefault(); event.stopPropagation(); } }}>
@@ -50,6 +54,7 @@
     </button>
     <button class="icon-button" aria-label={ui.t(ui.player.playing ? 'player.pause' : 'player.play')} onclick={() => ui.api.player.toggle()}><Icon name={ui.player.playing ? 'pause' : 'play'} size="s" /></button>
     <button class="icon-button" aria-pressed={ui.track.liked} aria-label={ui.t(ui.track.liked ? 'track.unlike' : 'track.like')} onclick={() => ui.track && ui.like(ui.track)}><Icon name="heart" filled={ui.track.liked} size="s" /></button>
+    {#if desktopVolume}<VolumeControl />{/if}
     <button class="icon-button next" aria-label={ui.t('player.next')} onclick={() => ui.api.player.next()}><Icon name="next" size="s" /></button>
     <div class="progress"><span class="progress-played" use:waveformProgress={{ position: ui.position / (ui.track.duration || 1), steps: 100 }}><i></i></span></div>
   </div></div>

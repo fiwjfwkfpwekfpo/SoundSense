@@ -13,6 +13,8 @@
   import EmptyState from '../components/EmptyState.svelte';
   import type { IconName } from '../icons/Icon.svelte';
   import Icon from '../icons/Icon.svelte';
+  import VolumeControl from '../components/VolumeControl.svelte';
+  import { isDesktop } from '../../platform/desktop';
   const ui = useModel();
   let currentId = $derived(ui.track?.id);
   let waveform = $state<WaveformData | null>(null);
@@ -57,7 +59,7 @@
     if (!gesture) return;
     const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y, speed = dy / Math.max(1, event.timeStamp - gesture.start) * 1000;
     if (gesture.axis === 'x' && Math.abs(dx) >= 64) { const offset = dragX, velocity = gesture.velocity * Math.exp(-Math.max(0, event.timeStamp - gesture.time) / 50); if (dx < 0) ui.api.player.next(); else ui.api.player.previous(false); ui.coverRelease = { transitionId: ui.player?.transition?.id ?? -1, offset, velocity }; reset(); return; }
-    if (gesture.axis === 'y' && (dy > 120 || dy > 40 && speed > 700)) { reset(); ui.nav.back(); return; }
+    if (gesture.axis === 'y' && (dy > 120 || dy > 40 && speed > 700)) { reset(); ui.nav.collapse(); return; }
     if (gesture.axis === 'y' && !wide && (dy < -70 || dy < -30 && speed < -600)) ui.nav.open('lyrics');
     reset();
   }
@@ -68,7 +70,7 @@
     <BeatVisuals />
     <div class="split" class:wide>
     <div class="player-content">
-      <header class="toolbar"><button class="icon-button" aria-label={ui.t('player.collapse')} onclick={() => ui.nav.back()}><Icon name="chevron-down" size="l" /></button><div class="toolbar-actions">{#if ui.api.capabilities?.soundProcessing !== false}<button class="icon-button sound-button" class:active={soundChanged} aria-label={ui.t('player.sound')} title={ui.t('player.sound')} onclick={() => ui.nav.sheet({ kind: 'sound' })}><Icon name="sliders" /></button>{/if}<button class="icon-button" aria-label={ui.t('player.menu')} onclick={() => ui.nav.sheet({ kind: 'playerMenu' })}><Icon name="more" /></button></div></header>
+      <header class="toolbar"><button class="icon-button" aria-label={ui.t('player.collapse')} onclick={() => ui.nav.collapse()}><Icon name="chevron-down" size="l" /></button><div class="toolbar-actions">{#if isDesktop() && ui.api.audioSettings}<VolumeControl below size="m" />{/if}{#if ui.api.capabilities?.soundProcessing !== false}<button class="icon-button sound-button" class:active={soundChanged} aria-label={ui.t('player.sound')} title={ui.t('player.sound')} onclick={() => ui.nav.sheet({ kind: 'sound' })}><Icon name="sliders" /></button>{/if}<button class="icon-button" aria-label={ui.t('player.menu')} onclick={() => ui.nav.sheet({ kind: 'playerMenu' })}><Icon name="more" /></button></div></header>
       <div class="metadata"><div class="track-info">{#key ui.track.id}<div class="title-motion" data-motion-group="title" transition:motionTransition={{ group: 'title', duration: ui.player.transition?.kind === 'crossfade' ? ui.player.transition.duration : undefined }}><div data-motion-content><h1 aria-label={ui.track.title}><span data-title-text data-title={ui.track.title}>{ui.track.title}</span>{#if ui.track.explicit}<span class="explicit" aria-label={ui.t('track.explicit')}>E</span>{/if}</h1><button class="artist" onclick={() => ui.track && ui.nav.go({ name: 'artist', id: ui.track.artist.id })}>{ui.track.artist.name}</button></div></div>{/key}<p class="stream-source" data-testid="stream-source">{#if ui.track.downloaded || ui.track.sources.some(source => source.kind === 'local')}<Icon name="download" size="s" /><span>{ui.t(ui.track.sources.some(source => source.kind === 'local') ? 'player.playingLocal' : 'player.playingOffline')}</span>{:else}{@const provider = ui.streams[ui.track.id] ?? ui.track.sources[0]?.kind}{#if provider}<span class="dot"></span><span>{ui.t('player.playingFrom', { source: ui.t(`source.${provider}`) })}</span>{/if}{/if}</p></div><div class="side-actions">{#each ui.contributions('playerButtons').filter(item => item.location === 'side') as item}<button class="icon-button surface" aria-pressed={item.command === 'like' ? ui.track.liked : undefined} aria-label={ui.t(item.command === 'like' ? ui.track.liked ? 'track.unlike' : 'track.like' : item.titleKey)} onclick={() => { if (item.command === 'like' && ui.track) ui.like(ui.track); else if (item.command === 'lyrics') ui.nav.open('lyrics'); else ui.api.extensions.events.emit('ui:command', { command: item.command, slot: 'playerButtons', trackId: ui.track?.id }); }}><Icon name={item.icon as IconName} filled={item.command === 'like' && ui.track.liked} /></button>{/each}</div></div>
       <div class="art-space"><TrackArtwork {dragX} {dragY} {dragging} /></div>
       <div class="playback">{#if !ui.settings.values.waveform || waveform?.status === 'deferred'}<ProgressBar position={ui.position} duration={ui.track.duration} onseek={seek} />
@@ -104,13 +106,14 @@
   .stream-source .dot { width: var(--space-2); height: var(--space-2); border-radius: var(--radius-full); background: var(--color-accent); }
   .side-actions { display: flex; flex-direction: column; gap: var(--space-3); }
   .side-actions button { background: var(--color-player-control-surface); border: var(--border-width) solid var(--color-player-control-border); }
+  .side-actions button[aria-pressed='true'] { color: var(--color-accent); border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 22%, var(--color-player-control-surface)); }
   .art-space { flex: 1; min-height: var(--space-8); display: flex; align-items: center; justify-content: center; padding: var(--space-4) 0 var(--space-5); }
   @media (max-height: 760px) { .art-space :global(.art-stack) { width: min(34vw, 140px); } }
   .playback { padding-bottom: var(--space-1); }
   .controls { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); margin-top: var(--space-7); }
   .secondary { color: var(--color-text-muted); position: relative; }
-  .enabled { color: var(--color-text); }
-  .enabled::after { position: absolute; bottom: 0; left: 50%; content: ''; width: var(--space-1); height: var(--space-1); background: var(--color-text); border-radius: var(--radius-full); }
+  .enabled { color: var(--color-accent); }
+  .enabled::after { position: absolute; bottom: calc(var(--space-1) / 2); left: 50%; transform: translateX(-50%); content: ''; width: var(--space-1); height: var(--space-1); background: var(--color-accent); border-radius: var(--radius-full); }
   .play-button { display: grid; place-items: center; width: var(--player-play-size); height: var(--player-play-size); flex-shrink: 0; border-radius: var(--radius-full); background: var(--color-accent); color: var(--color-on-accent); }
   .queue-link { display: flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: var(--touch-size); margin: var(--space-4) auto 0; color: var(--color-text-muted); font-size: calc(var(--font-size-s) * var(--font-scale)); }
   .queue-number { border: var(--border-width) solid var(--color-border); border-radius: var(--radius-full); padding: 0 var(--space-2); }

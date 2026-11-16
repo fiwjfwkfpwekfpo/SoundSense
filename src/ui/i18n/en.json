@@ -540,6 +540,7 @@
   "audio.speedPitch": "Tape speed",
   "audio.pitch": "Pitch",
   "audio.volume": "Volume / gain",
+  "audio.volumeShort": "Volume",
   "audio.semitones": "st",
   "audio.reset": "Reset audio settings",
   "library.overviewHint": "Everything you collect and listen to.",
