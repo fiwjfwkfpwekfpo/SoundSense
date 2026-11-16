@@ -35,7 +35,7 @@ test('crossfade changes artwork, title and waveform during the overlap', async (
 test('cover follows the finger and release completes switching', async ({ page }) => {
   await ready(page); await openPlayer(page); const artwork = page.getByTestId('track-artwork'), bounds = (await artwork.boundingBox())!;
   await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2); await page.mouse.down(); await page.mouse.move(bounds.x + bounds.width / 2 - 95, bounds.y + bounds.height / 2, { steps: 10 });
-  await expect(artwork.locator('.current')).toHaveAttribute('style', /translateX\(-95px\)/); await page.screenshot({ path: 'docs/screens/ux2/cover-drag.png' }); await page.mouse.up();
+  await expect(artwork.locator('.current')).toHaveAttribute('style', /translate\(-95px, 0px\)/); await page.screenshot({ path: 'docs/screens/ux2/cover-drag.png' }); await page.mouse.up();
   await expect(page.getByTestId('player').getByRole('heading', { name: 'Как ты там?', exact: true })).toBeVisible();
 });
 test('zoomed wave scrolls under a fixed centre playhead and ticks bar by bar', async ({ page }) => {

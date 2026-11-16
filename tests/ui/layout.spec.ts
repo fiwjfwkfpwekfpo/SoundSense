@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ready, goTab, openPlayer, chooseAppearance } from './helpers';
+import { ready, goTab, openPlayer, chooseAppearance, settingsTab } from './helpers';
 test.beforeEach(async ({ page }) => { await ready(page); });
 test('native runtime never uses the development phone frame', async ({ page }) => {
   await page.setViewportSize({ width: 915, height: 1000 });
@@ -12,7 +12,7 @@ test('safe areas are applied once and every scroll screen ends above the measure
   const initial = await page.locator('main').evaluate(element => ({ top: element.getBoundingClientRect().top, viewport: innerHeight }));
   expect(initial).toEqual({ top: 48, viewport: 915 });
   for (const tab of ['Мне нравится', 'Поиск', 'Настройки']) {
-    await goTab(page, tab);
+    await goTab(page, tab); if (tab === 'Настройки') await settingsTab(page, 'Приложение');
     if (tab === 'Поиск') { await page.getByRole('textbox', { name: 'Поиск музыки' }).fill('а'); await expect(page.locator('main [data-track-id]').first()).toBeVisible(); }
     await page.locator('main').evaluate(element => { element.scrollTop = element.scrollHeight; });
     const target = tab === 'Мне нравится' ? page.locator('main [data-track-id="collection-2024"]') : tab === 'Настройки' ? page.locator('main footer') : page.locator('main [data-track-id]').last();
@@ -40,7 +40,7 @@ test('selection sheets cover the dock and contain no native select controls', as
 test('switches change knob position and palette in both themes', async ({ page }) => {
   await goTab(page, 'Настройки');
   for (const theme of ['Светлая фикстура', 'Монохром']) {
-    await chooseAppearance(page, 'Цвета', theme);
+    await settingsTab(page, 'Оформление'); await chooseAppearance(page, 'Цвета', theme); await settingsTab(page, 'Плеер');
     const toggle = page.getByRole('switch', { name: 'Вибрация', exact: true });
     await expect(toggle).toHaveAttribute('aria-checked', 'true');
     const before = await toggle.locator('i').boundingBox(); await toggle.click();

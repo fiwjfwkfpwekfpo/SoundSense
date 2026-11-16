@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { actualApp, goTab } from './helpers';
+import { actualApp, goTab, settingsTab } from './helpers';
 import { resolve } from 'node:path';
 
 for (const kind of ['likes', 'playlist'] as const) test(`public Yandex ${kind} imports by link without account authorization`, async ({ page }) => {
@@ -50,7 +50,7 @@ test('settings import signs into Yandex, selects likes and playlists and keeps b
       : path.endsWith('/tracks') ? new URLSearchParams(route.request().postData()!).get('track-ids')!.split(',').map(item) : {};
     return route.fulfill({ json: { result } });
   });
-  await actualApp(page); await goTab(page, 'Настройки');
+  await actualApp(page); await goTab(page, 'Настройки'); await settingsTab(page, 'Приложение');
   await page.getByRole('button', { name: 'Импорт музыки', exact: true }).click();
   await page.getByRole('button', { name: 'Яндекс', exact: true }).click();
   await page.getByText('Личный аккаунт · необязательно', { exact: true }).click();
