@@ -1,49 +1,25 @@
 {
-  "version": "1.4.8",
+  "version": "1.4.9",
   "ru": [
-    "Android: у приложения новая подпись. Один раз удали старую версию и поставь эту вручную (лайки и плейлисты заранее сохрани через синхронизацию).",
-    "Исправлено: громкость больше не падает посреди трека (выравнивание громкости применяется только с начала трека).",
-    "Исправлено: громкость общая для всех треков, свои настройки трека её не меняют.",
-    "ПК: добавлен кэш прослушанного и скачивание треков, повторно треки не качаются.",
-    "ПК: громкость — кнопка с вертикальным ползунком в панели, мини-плеере и плеере; колесо мыши меняет громкость.",
-    "ПК: ряды кнопок (пресеты звука и другие) листаются колесом и мышью.",
-    "Android: исправлено переключение треков в фоне (сбой предзагрузки, истёкшая ссылка, недоступный трек).",
-    "Исправлено: свайп вниз в плеере после текста закрывает плеер.",
-    "Лайк, перемешивание и повтор: активное состояние видно сразу."
+    "Исправлено: проверка и загрузка обновлений там, где GitHub недоступен напрямую (запасные адреса: GitHub API, jsDelivr, файлы релиза).",
+    "Каталог плагинов загружается через те же запасные адреса.",
+    "Кнопка «Перемешать» в «Мне нравится» и плейлистах показывает, включено ли перемешивание, и переключает его."
   ],
   "en": [
-    "Android: the app has a new signing key. Uninstall the old version once and install this one manually (sync your likes and playlists first).",
-    "Fixed: the volume no longer drops in the middle of a track (loudness normalization applies from the start of a track only).",
-    "Fixed: one volume for all tracks; a track's own sound settings no longer change it.",
-    "Desktop: cache of listened tracks and track downloads; tracks are not fetched again.",
-    "Desktop: volume is a button with a vertical slider in the bar, mini player and player; the mouse wheel changes it.",
-    "Desktop: rows of chips (sound presets and others) scroll with the wheel and by dragging.",
-    "Android: fixed track switching in the background (failed preload, expired link, unavailable track).",
-    "Fixed: swiping down in the player after the lyrics closes the player.",
-    "Like, shuffle and repeat: the active state is clearly visible."
+    "Fixed: checking and downloading updates where GitHub is not reachable directly (fallback addresses: GitHub API, jsDelivr, release files).",
+    "The plugin catalog loads through the same fallback addresses.",
+    "The Shuffle button in Liked and playlists shows whether shuffle is on and toggles it."
   ],
   "channel": {
     "ru": [
-      "Android: у приложения новая подпись. Один раз удали старую версию и поставь эту вручную (лайки и плейлисты заранее сохрани через синхронизацию).",
-      "Исправлено: громкость больше не падает посреди трека (выравнивание громкости применяется только с начала трека).",
-      "Исправлено: громкость общая для всех треков, свои настройки трека её не меняют.",
-      "ПК: добавлен кэш прослушанного и скачивание треков, повторно треки не качаются.",
-      "ПК: громкость — кнопка с вертикальным ползунком в панели, мини-плеере и плеере; колесо мыши меняет громкость.",
-      "ПК: ряды кнопок (пресеты звука и другие) листаются колесом и мышью.",
-      "Android: исправлено переключение треков в фоне (сбой предзагрузки, истёкшая ссылка, недоступный трек).",
-      "Исправлено: свайп вниз в плеере после текста закрывает плеер.",
-      "Лайк, перемешивание и повтор: активное состояние видно сразу."
+      "Исправлено: проверка и загрузка обновлений там, где GitHub недоступен напрямую (запасные адреса: GitHub API, jsDelivr, файлы релиза).",
+      "Каталог плагинов загружается через те же запасные адреса.",
+      "Кнопка «Перемешать» в «Мне нравится» и плейлистах показывает, включено ли перемешивание, и переключает его."
     ],
     "en": [
-      "Android: the app has a new signing key. Uninstall the old version once and install this one manually (sync your likes and playlists first).",
-      "Fixed: the volume no longer drops in the middle of a track (loudness normalization applies from the start of a track only).",
-      "Fixed: one volume for all tracks; a track's own sound settings no longer change it.",
-      "Desktop: cache of listened tracks and track downloads; tracks are not fetched again.",
-      "Desktop: volume is a button with a vertical slider in the bar, mini player and player; the mouse wheel changes it.",
-      "Desktop: rows of chips (sound presets and others) scroll with the wheel and by dragging.",
-      "Android: fixed track switching in the background (failed preload, expired link, unavailable track).",
-      "Fixed: swiping down in the player after the lyrics closes the player.",
-      "Like, shuffle and repeat: the active state is clearly visible."
+      "Fixed: checking and downloading updates where GitHub is not reachable directly (fallback addresses: GitHub API, jsDelivr, release files).",
+      "The plugin catalog loads through the same fallback addresses.",
+      "The Shuffle button in Liked and playlists shows whether shuffle is on and toggles it."
     ]
   }
 }
