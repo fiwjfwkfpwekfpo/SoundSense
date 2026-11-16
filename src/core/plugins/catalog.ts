@@ -1,4 +1,4 @@
-import { PLUGIN_CATALOG_URL } from '../repository';
+import { repositoryFileUrls, repositoryHeaders } from '../repository';
 import type { HttpClient } from '../http';
 import { PluginError } from './types';
 
@@ -26,11 +26,21 @@ export function parseCatalog(source: string): readonly CatalogEntry[] {
     return [{ id: e.id, name: e.name, description: e.description, version: String(e.version), author: typeof e.author === 'string' ? e.author : '', apiVersion: String(e.apiVersion ?? ''), permissions: e.permissions.map(String), package: String(e.package), size: e.size as number, sha256: String(e.sha256) }];
   });
 }
-export function createPluginCatalog(http: HttpClient, base = PLUGIN_CATALOG_URL): PluginCatalogApi {
+/** The catalog and packages are read from the first address that answers (see repositoryFileUrls); packages are checked by SHA-256. */
+export function createPluginCatalog(http: HttpClient, base?: string): PluginCatalogApi {
+  const addresses = (file: string) => base ? [`${base}/${file}`] : repositoryFileUrls('main', `plugins/${file}`);
+  async function read(file: string, signal?: AbortSignal) {
+    let failure: unknown = new Error('No catalog address');
+    for (const url of addresses(file)) {
+      signal?.throwIfAborted();
+      try { const headers = repositoryHeaders(url); return await http.text(url, signal, headers ? { headers } : undefined); } catch (error) { if (signal?.aborted) throw error; failure = error; }
+    }
+    throw failure;
+  }
   return {
-    async list(signal) { return parseCatalog(await http.text(`${base}/catalog.json`, signal)); },
+    async list(signal) { return parseCatalog(await read('catalog.json', signal)); },
     async download(entry, signal) {
-      const b64 = (await http.text(`${base}/${entry.package}`, signal)).trim();
+      const b64 = (await read(entry.package, signal)).trim();
       if (!/^[A-Za-z\d+/]+={0,2}$/.test(b64)) throw new PluginError('catalog', 'Unreadable package');
       const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
       if (bytes.length !== entry.size || await hex(bytes) !== entry.sha256) throw new PluginError('catalog', 'Package does not match the catalog (size or SHA-256)');

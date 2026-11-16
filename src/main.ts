@@ -35,7 +35,7 @@ import { createLibrary } from './core/library';
 import { createPlayer } from './core/player';
 import { createSettings } from './core/settings';
 import type { AppApi } from './core/api';
-import { createUpdates, DEFAULT_UPDATE_URL } from './core/updates';
+import { createUpdates, DEFAULT_UPDATE_URLS } from './core/updates';
 import { createUpdateInstaller } from './platform/updates';
 import { APP_VERSION, APP_VERSION_CODE } from './core/version';
 import { createStorage } from './platform/storage';
@@ -135,7 +135,7 @@ if (DEBUG_TOOLS && import.meta.env.DEV && new URLSearchParams(location.search).g
   else if (Capacitor.isNativePlatform()) api.waveCache = { getStats: () => SystemUi.getWaveCache(), clear: () => SystemUi.clearWaveCache() };
   const installed = Capacitor.isNativePlatform() ? await NativeApp.getInfo().then(info => ({ version: info.version, versionCode: Number(info.build) })) : { version: APP_VERSION, versionCode: APP_VERSION_CODE };
   api.updates = createUpdates({ http, installed, platform: desktop ? 'linux-appimage' : 'android', channel: APP_CHANNEL, installer: createUpdateInstaller(), storage,
-    urls: () => [DEFAULT_UPDATE_URL],
+    urls: () => DEFAULT_UPDATE_URLS,
   });
   if (BETA_FEATURES && typeof Worker !== 'undefined') {
     const [{ createPluginHost }, { spawnPluginWorker }] = await Promise.all([import('./core/plugins/host'), import('./platform/plugins')]);

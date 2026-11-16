@@ -78,6 +78,8 @@ console.log(`${filename}: ${size} bytes, sha256 ${sha}`);
 const withDesktop = !args.has('--skip-desktop');
 const appImage = join(root, `artifacts/desktop/${channel.name}/SoundSense-${version}-${channel.name}-x86_64.AppImage`);
 const appImageUrl = `https://github.com/${REPO}/releases/download/v${version}/${basename(appImage)}`;
+// The APK is also a release asset: github.com release downloads work where raw.githubusercontent.com is blocked.
+const apkUrl = `https://github.com/${REPO}/releases/download/v${version}/${filename}`;
 if (withDesktop) {
   if (!args.has('--skip-build')) { step('Build AppImage'); run('npm', ['run', channel.name === 'beta' ? 'desktop:appimage:beta' : 'desktop:appimage']); }
   if (!existsSync(appImage)) fail('AppImage not found');
@@ -86,7 +88,7 @@ if (withDesktop) {
 
 step('Sign manifest');
 const signed = join(BUILDS, `${channel.name}-${version}.json`);
-run('node', ['scripts/release/sign-manifest.mjs', apk, signed, version, String(versionCode), ORIGIN], { env: { SS_CHANNEL: channel.name, ...(withDesktop ? { SS_LINUX_APPIMAGE: appImage, SS_LINUX_URL: appImageUrl } : {}) } });
+run('node', ['scripts/release/sign-manifest.mjs', apk, signed, version, String(versionCode), ORIGIN], { env: { SS_CHANNEL: channel.name, SS_EXTRA_URLS: apkUrl, ...(withDesktop ? { SS_LINUX_APPIMAGE: appImage, SS_LINUX_URL: appImageUrl } : {}) } });
 
 /** GitHub REST call through curl (the proxy from .release/config.json, the token from .release/github-token). */
 function github(method, url, { json, file } = {}) {
@@ -100,9 +102,9 @@ function github(method, url, { json, file } = {}) {
   let body = null; try { body = JSON.parse(out.slice(0, cut)); } catch { /* No JSON body. */ }
   return { status: Number(out.slice(cut + 1)), body };
 }
-/** The AppImage (over 100 MB) cannot live in a git branch: it is an asset of the GitHub Release v<version>. */
-function uploadAppImage() {
-  if (!existsSync(TOKEN_FILE)) fail(`The AppImage is uploaded through the GitHub API: put a token with Contents: write in ${TOKEN_FILE}`);
+/** Release assets of v<version>: the AppImage (over 100 MB, it cannot live in a git branch) and a copy of the APK. */
+function uploadAssets(files) {
+  if (!existsSync(TOKEN_FILE)) fail(`Release assets are uploaded through the GitHub API: put a token with Contents: write in ${TOKEN_FILE}`);
   const base = `https://api.github.com/repos/${REPO}`, tag = `v${version}`;
   let release = github('GET', `${base}/releases/tags/${tag}`);
   if (release.status === 404) {
@@ -110,23 +112,26 @@ function uploadAppImage() {
     release = github('POST', `${base}/releases`, { json: { tag_name: tag, target_commitish: run('git', ['rev-parse', 'HEAD'], { capture: true }).trim(), name: `SoundSense ${version}`, body, draft: false, prerelease: false } });
   }
   if (![200, 201].includes(release.status) || !release.body?.id) fail(`GitHub release ${tag}: HTTP ${release.status} ${release.body?.message ?? ''} (is the commit pushed?)`);
-  const name = basename(appImage), existing = release.body.assets?.find(asset => asset.name === name);
+  for (const file of files) uploadAsset(release.body, file, tag);
+}
+function uploadAsset(release, file, tag) {
+  const base = `https://api.github.com/repos/${REPO}`, name = basename(file), existing = release.assets?.find(asset => asset.name === name);
   if (existing) {
-    if (existing.size === statSync(appImage).size) { console.log(`${name} is already attached to ${tag}`); return; }
+    if (existing.size === statSync(file).size) { console.log(`${name} is already attached to ${tag}`); return; }
     fail(`${name} is already published with other content. Raise version/versionCode.`);
   }
   console.log(`Uploading ${name} to ${tag}…`);
   let uploaded; for (let attempt = 1; attempt <= 4; attempt++) {
-    uploaded = github('POST', `https://uploads.github.com/repos/${REPO}/releases/${release.body.id}/assets?name=${encodeURIComponent(name)}`, { file: appImage });
+    uploaded = github('POST', `https://uploads.github.com/repos/${REPO}/releases/${release.id}/assets?name=${encodeURIComponent(name)}`, { file });
     if (uploaded.status === 201) break;
     console.log(`Attempt ${attempt} failed: HTTP ${uploaded.status} ${uploaded.body?.message ?? ''}`);
-    const again = github('GET', `${base}/releases/${release.body.id}/assets`);   // A cut-off upload can leave a broken asset: remove it.
+    const again = github('GET', `${base}/releases/${release.id}/assets`);   // A cut-off upload can leave a broken asset: remove it.
     for (const asset of Array.isArray(again.body) ? again.body : []) if (asset.name === name) github('DELETE', `${base}/releases/assets/${asset.id}`);
   }
   if (uploaded.status !== 201) fail(`Upload failed: HTTP ${uploaded.status} ${uploaded.body?.message ?? ''}`);
 }
 
-if (!dry && withDesktop) { step('Upload AppImage'); uploadAppImage(); }
+if (!dry) { step('Upload release assets'); uploadAssets(withDesktop ? [apk, appImage] : [apk]); }
 
 if (!dry) {
   step(`Publish to the ${BRANCH} branch`);
