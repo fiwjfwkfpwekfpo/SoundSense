@@ -37,7 +37,7 @@ const TOKEN_FILE = join(root, '.release/github-token');
 const REMOTE = process.env.SS_RELEASES_REMOTE ?? (existsSync(TOKEN_FILE) ? `https://github.com/${REPO}.git` : `git@github.com:${REPO}.git`);
 const ORIGIN = `https://raw.githubusercontent.com/${REPO}/${BRANCH}`;
 const CONFIG = join(root, '.release/config.json'), BUILDS = join(root, `artifacts/android/${channel.name}`);
-const EXPECTED_CERT = process.env.SS_APK_CERT_SHA256 ?? '8a837ef4482d01e8367f82ed74d6b50de24743bd0ce5fb23385062231fe00c4e';
+const EXPECTED_CERT = process.env.SS_APK_CERT_SHA256 ?? '8f2c8e332938e36fbddbe1ba983ae3051a4f504a8bb0a257019f28a560bdf1f3';
 
 const step = title => console.log(`\n▶ ${title}`);
 const fail = message => { console.error(`\n✖ ${message}`); process.exit(1); };
