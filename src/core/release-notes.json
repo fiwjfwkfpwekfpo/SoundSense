@@ -1,21 +1,49 @@
 {
-  "version": "1.4.7",
+  "version": "1.4.8",
   "ru": [
-    "ПК (Linux): приложение обновляется само — новая версия AppImage скачивается и ставится по кнопке в настройках, подпись и контрольная сумма проверяются.",
-    "Установка AppImage добавляет запись меню и иконки по стандартам XDG; кэш вынесен в ~/.cache/soundsense."
+    "Android: у приложения новая подпись. Один раз удали старую версию и поставь эту вручную (лайки и плейлисты заранее сохрани через синхронизацию).",
+    "Исправлено: громкость больше не падает посреди трека (выравнивание громкости применяется только с начала трека).",
+    "Исправлено: громкость общая для всех треков, свои настройки трека её не меняют.",
+    "ПК: добавлен кэш прослушанного и скачивание треков, повторно треки не качаются.",
+    "ПК: громкость — кнопка с вертикальным ползунком в панели, мини-плеере и плеере; колесо мыши меняет громкость.",
+    "ПК: ряды кнопок (пресеты звука и другие) листаются колесом и мышью.",
+    "Android: исправлено переключение треков в фоне (сбой предзагрузки, истёкшая ссылка, недоступный трек).",
+    "Исправлено: свайп вниз в плеере после текста закрывает плеер.",
+    "Лайк, перемешивание и повтор: активное состояние видно сразу."
   ],
   "en": [
-    "Desktop (Linux): the app updates itself — a new AppImage is downloaded and installed from Settings, signature and checksum are verified.",
-    "Installing the AppImage adds a menu entry and icons following XDG; cache moved to ~/.cache/soundsense."
+    "Android: the app has a new signing key. Uninstall the old version once and install this one manually (sync your likes and playlists first).",
+    "Fixed: the volume no longer drops in the middle of a track (loudness normalization applies from the start of a track only).",
+    "Fixed: one volume for all tracks; a track's own sound settings no longer change it.",
+    "Desktop: cache of listened tracks and track downloads; tracks are not fetched again.",
+    "Desktop: volume is a button with a vertical slider in the bar, mini player and player; the mouse wheel changes it.",
+    "Desktop: rows of chips (sound presets and others) scroll with the wheel and by dragging.",
+    "Android: fixed track switching in the background (failed preload, expired link, unavailable track).",
+    "Fixed: swiping down in the player after the lyrics closes the player.",
+    "Like, shuffle and repeat: the active state is clearly visible."
   ],
   "channel": {
     "ru": [
-      "ПК (Linux): приложение обновляется само — новая версия AppImage скачивается и ставится по кнопке в настройках, подпись и контрольная сумма проверяются.",
-      "Установка AppImage добавляет запись меню и иконки по стандартам XDG; кэш вынесен в ~/.cache/soundsense."
+      "Android: у приложения новая подпись. Один раз удали старую версию и поставь эту вручную (лайки и плейлисты заранее сохрани через синхронизацию).",
+      "Исправлено: громкость больше не падает посреди трека (выравнивание громкости применяется только с начала трека).",
+      "Исправлено: громкость общая для всех треков, свои настройки трека её не меняют.",
+      "ПК: добавлен кэш прослушанного и скачивание треков, повторно треки не качаются.",
+      "ПК: громкость — кнопка с вертикальным ползунком в панели, мини-плеере и плеере; колесо мыши меняет громкость.",
+      "ПК: ряды кнопок (пресеты звука и другие) листаются колесом и мышью.",
+      "Android: исправлено переключение треков в фоне (сбой предзагрузки, истёкшая ссылка, недоступный трек).",
+      "Исправлено: свайп вниз в плеере после текста закрывает плеер.",
+      "Лайк, перемешивание и повтор: активное состояние видно сразу."
     ],
     "en": [
-      "Desktop (Linux): the app updates itself — a new AppImage is downloaded and installed from Settings, signature and checksum are verified.",
-      "Installing the AppImage adds a menu entry and icons following XDG; cache moved to ~/.cache/soundsense."
+      "Android: the app has a new signing key. Uninstall the old version once and install this one manually (sync your likes and playlists first).",
+      "Fixed: the volume no longer drops in the middle of a track (loudness normalization applies from the start of a track only).",
+      "Fixed: one volume for all tracks; a track's own sound settings no longer change it.",
+      "Desktop: cache of listened tracks and track downloads; tracks are not fetched again.",
+      "Desktop: volume is a button with a vertical slider in the bar, mini player and player; the mouse wheel changes it.",
+      "Desktop: rows of chips (sound presets and others) scroll with the wheel and by dragging.",
+      "Android: fixed track switching in the background (failed preload, expired link, unavailable track).",
+      "Fixed: swiping down in the player after the lyrics closes the player.",
+      "Like, shuffle and repeat: the active state is clearly visible."
     ]
   }
 }
