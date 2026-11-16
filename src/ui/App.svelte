@@ -34,6 +34,7 @@
   import { isDesktop } from '../platform/desktop';
   import { layout } from './layout.svelte';
   import ActionSheets from './components/ActionSheets.svelte';
+  import { bindHorizontalScroll } from './hscroll';
   let { api }: { api: AppApi } = $props();
   const ui = new UiModel(untrack(() => api)); provideModel(ui);
   let scrollElement = $state<HTMLElement>();
@@ -152,6 +153,7 @@
     window.addEventListener('app:back', back);
     return () => window.removeEventListener('app:back', back);
   });
+  onMount(() => bindHorizontalScroll());
   onMount(() => { const failed = () => ui.notify('settings.storageUnavailable'); window.addEventListener('app:storage-error', failed); return () => window.removeEventListener('app:storage-error', failed); });
 </script>
 <div class="stage"><div class="device" class:nav-left={sideNav && !onboarding} class:wide={wide && !onboarding} data-testid="app-shell">

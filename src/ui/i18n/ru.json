@@ -540,6 +540,7 @@
   "audio.speedPitch": "Скорость с изменением тона",
   "audio.pitch": "Высота тона",
   "audio.volume": "Громкость / усиление",
+  "audio.volumeShort": "Громкость",
   "audio.semitones": "пт",
   "audio.reset": "Сбросить настройки звука",
   "library.overviewHint": "Всё, что ты собрал и слушаешь.",
