@@ -13,7 +13,7 @@ if (actual !== pinned.publicKey) throw new Error('Signing key does not match the
 const release = JSON.parse(readFileSync(new URL('../../src/core/release-notes.json', import.meta.url)));
 if (release.version !== version) throw new Error('Update release-notes.json for this version before signing');
 const notes = { ru: release.ru, en: release.en };
-const payload = { schema: 1, channel: channel.name, version, versionCode: Number(code), publishedAt: new Date().toISOString(), notes, artifacts: { android: { filename: basename(apk), size: statSync(apk).size, sha256: createHash('sha256').update(readFileSync(apk)).digest('hex'), urls: [`${origin.replace(/\/$/, '')}/${encodeURIComponent(basename(apk))}`, ...String(process.env.SS_EXTRA_URLS ?? '').split(',').map(value => value.trim()).filter(value => /^https:\/\//.test(value))].slice(0, 12) } } };
+const payload = { schema: 1, channel: channel.name, version, versionCode: Number(code), publishedAt: new Date().toISOString(), notes, artifacts: { android: { filename: basename(apk), size: statSync(apk).size, sha256: createHash('sha256').update(readFileSync(apk)).digest('hex'), urls: [...String(process.env.SS_EXTRA_URLS ?? '').split(',').map(value => value.trim()).filter(value => /^https:\/\//.test(value)), `${origin.replace(/\/$/, '')}/${encodeURIComponent(basename(apk))}`].slice(0, 12) } } };
 // The desktop build (AppImage) travels in the same manifest; it is too big for a git branch, so its address is a GitHub Release asset.
 if (process.env.SS_LINUX_APPIMAGE) {
   const file = process.env.SS_LINUX_APPIMAGE, url = process.env.SS_LINUX_URL;

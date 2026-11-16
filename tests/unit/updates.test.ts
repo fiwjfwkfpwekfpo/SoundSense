@@ -75,4 +75,13 @@ describe('signed update trust and fallback', () => {
     await updates.check(); const pending = updates.download(); updates.cancel(); finish('unused'); await pending;
     expect(updates.getSnapshot().phase).toBe('available');
   });
+  it('reads the manifest through the GitHub API with the raw media type, then jsDelivr, then raw.githubusercontent.com', async () => {
+    const { releaseFileUrls, repositoryHeaders } = await import('../../src/core/repository');
+    const urls = releaseFileUrls('beta.json');
+    expect(urls.map(url => new URL(url).hostname)).toEqual(['api.github.com', 'fastly.jsdelivr.net', 'raw.githubusercontent.com']);
+    expect(repositoryHeaders(urls[0]!)).toEqual({ Accept: 'application/vnd.github.raw' }); expect(repositoryHeaders(urls[1]!)).toBeUndefined();
+    const text = vi.fn(async () => { throw new Error('blocked'); });
+    const updates = createUpdates({ http: { text }, installed: { version: '0.1.0', versionCode: 1 }, platform: 'android', urls: () => urls });
+    await updates.check(); expect(text.mock.calls.map(call => (call as unknown[])[2])).toEqual([{ headers: { Accept: 'application/vnd.github.raw' } }, undefined, undefined]);
+  });
 });

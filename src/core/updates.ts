@@ -1,13 +1,13 @@
 import { verifyAsync } from '@noble/ed25519';
 import pinnedKey from './update-key.json';
 import { APP_CHANNEL } from './build';
-import { RELEASES_URL } from './repository';
+import { releaseFileUrls, repositoryHeaders } from './repository';
 import type { ReleaseChannel } from './build';
 import type { HttpClient } from './http';
 import type { Unsubscribe } from './types';
 
 export const UPDATE_CONTEXT = 'SoundSense/update-manifest/v1\n';
-export const DEFAULT_UPDATE_URL = `${RELEASES_URL}/${APP_CHANNEL}.json`;
+export const DEFAULT_UPDATE_URLS: readonly string[] = releaseFileUrls(`${APP_CHANNEL}.json`);
 export type UpdatePlatform = 'android' | 'linux-appimage' | 'windows';
 export interface UpdateArtifact { filename: string; size: number; sha256: string; urls: readonly string[] }
 export interface UpdateManifest {
@@ -74,7 +74,7 @@ export function createUpdates(options: { http: HttpClient; installed: { version:
       for (const url of [...new Set(options.urls())].slice(0, 12)) {
         if (!https(url)) { error = 'invalid'; continue; }
         try {
-          const text = await options.http.text(url, current.signal);
+          const headers = repositoryHeaders(url), text = await options.http.text(url, current.signal, headers ? { headers } : undefined);
           const manifest = verified?.text === text ? verified.manifest : await verifyUpdate(text, options.publicKey);
           verified = { text, manifest };
           if (current.signal.aborted) return;
