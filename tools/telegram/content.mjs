@@ -127,17 +127,22 @@ export const generalRules = `👋 <b>Welcome to SoundSense</b>
 ${block('', '')}
 ${foot}`;
 
-export function releaseMessage({ version, channel, notes, platforms, links: files, size }) {
+export function releaseMessage({ version, channel, notes, desktopNotes, platforms, links: files, size }) {
   const icon = { android: '📱 Android', 'linux-appimage': '🖥 Linux (AppImage)', windows: '🪟 Windows' };
   const kind = channel === 'beta' ? '🧪 beta' : '✅ stable';
   const quoteLines = list => `<blockquote expandable>${list.map(line => `• ${line.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])}`).join('\n')}</blockquote>`;
   return `🎧 <b>SoundSense ${version}</b>  ·  ${kind}
 ${platforms.map(name => icon[name] ?? name).join('  ·  ')}${size ? `  ·  ${size} MB` : ''}
 ${channel === 'beta' ? '\n⚠️ <i>Бета: возможны ошибки / Beta: bugs are possible</i>\n' : ''}
-🇷🇺 <b>Что нового</b>
+${desktopNotes ? `📱 <b>Android</b>
+🇷🇺 ${quoteLines(notes.ru)}
+🇬🇧 ${quoteLines(notes.en)}
+🖥 <b>ПК / Desktop</b>
+🇷🇺 ${quoteLines(desktopNotes.ru)}
+🇬🇧 ${quoteLines(desktopNotes.en)}` : `🇷🇺 <b>Что нового</b>
 ${quoteLines(notes.ru)}
 🇬🇧 <b>What's new</b>
-${quoteLines(notes.en)}
+${quoteLines(notes.en)}`}
 
 🔄 <i>Приложение обновится само: Настройки → О приложении.
 The app updates itself: Settings → About.</i>

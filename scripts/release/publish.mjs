@@ -54,6 +54,7 @@ const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const notes = JSON.parse(readFileSync(join(root, 'src/core/release-notes.json'), 'utf8'));
 const { version } = pkg, versionCode = channelVersionCode(pkg.versionCode, channel.name);
 if (notes.version !== version) fail(`release-notes.json is for ${notes.version}, package.json is ${version}`);
+for (const platform of ['android', 'desktop']) if (!notes[platform]?.ru?.length || !notes[platform]?.en?.length) fail(`release-notes.json: "${platform}" needs ru and en lines`);
 const filename = `SoundSense-${version}-${channel.name}.apk`;
 const jdk = process.env.JAVA_HOME || resolve(root, '.toolchain/jdk-21');
 const apk = join(BUILDS, filename);
@@ -108,7 +109,8 @@ function uploadAssets(files) {
   const base = `https://api.github.com/repos/${REPO}`, tag = `v${version}`;
   let release = github('GET', `${base}/releases/tags/${tag}`);
   if (release.status === 404) {
-    const body = ['## SoundSense ' + version, '', ...notes.ru.map(line => `- ${line}`), '', ...notes.en.map(line => `- ${line}`), '', 'Desktop builds are downloaded by the in-app updater; the Android packages are in the `releases` branch.'].join('\n');
+    const section = (title, list) => [`### ${title}`, '', ...list.ru.map(line => `- ${line}`), '', ...list.en.map(line => `- ${line}`), ''];
+    const body = ['## SoundSense ' + version, '', ...(withDesktop ? section('Desktop', notes.desktop) : []), ...section('Android', notes.android), 'Desktop builds are downloaded by the in-app updater; the Android packages are in the `releases` branch.'].join('\n');
     release = github('POST', `${base}/releases`, { json: { tag_name: tag, target_commitish: run('git', ['rev-parse', 'HEAD'], { capture: true }).trim(), name: `SoundSense ${version}`, body, draft: false, prerelease: false } });
   }
   if (![200, 201].includes(release.status) || !release.body?.id) fail(`GitHub release ${tag}: HTTP ${release.status} ${release.body?.message ?? ''} (is the commit pushed?)`);
@@ -165,7 +167,8 @@ if (args.has('--telegram')) {
   if (!token) console.log(`Skipped: no token in ${CONFIG}`);
   else if (!dry) {
     const escape = value => String(value).replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]);
-    const lines = notes.channel ?? { ru: notes.ru, en: notes.en };
+    // The APK is attached here: only the Android changelog.
+    const lines = notes.android;
     const quote = list => `<blockquote expandable>${list.map(line => `– ${escape(line)}`).join('\n')}</blockquote>`;
     const caption = [
       `<b>🎧 SoundSense ${escape(version)}${channel.name === 'beta' ? ' beta' : ''}</b>`,
@@ -174,7 +177,7 @@ if (args.has('--telegram')) {
       '', '🇷🇺 RU:', quote(lines.ru), '', '🇺🇸 EN:', quote(lines.en),
     ].join('\n');
     const visible = caption.replace(/<[^>]+>/g, '').replace(/&(amp|lt|gt|quot);/g, 'x').length;
-    if (visible > 1024) fail(`Telegram caption is ${visible} characters (limit 1024): shorten "channel" notes in release-notes.json`);
+    if (visible > 1024) fail(`Telegram caption is ${visible} characters (limit 1024): shorten the "android" notes in release-notes.json`);
     mkdirSync(BUILDS, { recursive: true });
     const captionFile = join(BUILDS, 'telegram-caption.html'); writeFileSync(captionFile, caption);
     const answer = JSON.parse(run('curl', ['-sS', '--connect-timeout', '20', '-m', '600', ...via, '-F', `chat_id=${chat}`, '-F', 'parse_mode=HTML', '-F', `caption=<${captionFile}`, '-F', `document=@${apk};type=application/vnd.android.package-archive;filename=${filename}`, `https://api.telegram.org/bot${token}/sendDocument`], { capture: true }) || '{}');

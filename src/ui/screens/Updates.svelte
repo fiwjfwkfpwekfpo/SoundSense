@@ -5,9 +5,12 @@
   import releaseNotes from '../../core/release-notes.json';
   import Button from '../components/Button.svelte';
   import Icon from '../icons/Icon.svelte';
+  import { isDesktop } from '../../platform/desktop';
   const ui = useModel();
   let release = $derived(ui.updateState);
-  let notes = $derived(release?.manifest?.notes[ui.locale === 'en' ? 'en' : 'ru'] ?? releaseNotes[ui.locale === 'en' ? 'en' : 'ru']);
+  // Each platform has its own changelog: desktop changes never show up on Android and back.
+  const desktopApp = isDesktop();
+  let notes = $derived.by(() => { const locale = ui.locale === 'en' ? 'en' : 'ru', manifest = release?.manifest; return (desktopApp ? manifest?.desktopNotes ?? manifest?.notes : manifest?.notes)?.[locale] ?? releaseNotes[desktopApp ? 'desktop' : 'android'][locale]; });
 </script>
 <section class="screen updates-screen" aria-label={ui.t('update.title')}>
   <header class="screen-header"><button class="icon-button" aria-label={ui.t('nav.back')} onclick={() => ui.nav.back()}><Icon name="chevron-left" /></button><h1>{ui.t('update.title')}</h1><span></span></header>

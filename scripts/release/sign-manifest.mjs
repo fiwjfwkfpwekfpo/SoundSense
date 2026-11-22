@@ -12,12 +12,15 @@ const actual = createPublicKey(key).export({ format: 'der', type: 'spki' }).suba
 if (actual !== pinned.publicKey) throw new Error('Signing key does not match the pinned application key');
 const release = JSON.parse(readFileSync(new URL('../../src/core/release-notes.json', import.meta.url)));
 if (release.version !== version) throw new Error('Update release-notes.json for this version before signing');
-const notes = { ru: release.ru, en: release.en };
+// Separate changelogs: Android installs read `notes`, desktop builds read `desktopNotes`.
+const pick = platform => ({ ru: release[platform]?.ru ?? [], en: release[platform]?.en ?? [] });
+const notes = pick('android');
 const payload = { schema: 1, channel: channel.name, version, versionCode: Number(code), publishedAt: new Date().toISOString(), notes, artifacts: { android: { filename: basename(apk), size: statSync(apk).size, sha256: createHash('sha256').update(readFileSync(apk)).digest('hex'), urls: [...String(process.env.SS_EXTRA_URLS ?? '').split(',').map(value => value.trim()).filter(value => /^https:\/\//.test(value)), `${origin.replace(/\/$/, '')}/${encodeURIComponent(basename(apk))}`].slice(0, 12) } } };
 // The desktop build (AppImage) travels in the same manifest; it is too big for a git branch, so its address is a GitHub Release asset.
 if (process.env.SS_LINUX_APPIMAGE) {
   const file = process.env.SS_LINUX_APPIMAGE, url = process.env.SS_LINUX_URL;
   if (!/^https:\/\//.test(url ?? '')) throw new Error('SS_LINUX_URL must be an https address');
+  payload.desktopNotes = pick('desktop');
   payload.artifacts['linux-appimage'] = { filename: basename(file), size: statSync(file).size, sha256: createHash('sha256').update(readFileSync(file)).digest('hex'), urls: [url] };
 }
 const bytes = Buffer.from(JSON.stringify(payload));

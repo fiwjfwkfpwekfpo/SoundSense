@@ -13,6 +13,8 @@ export interface UpdateArtifact { filename: string; size: number; sha256: string
 export interface UpdateManifest {
   schema: 1; version: string; versionCode: number; publishedAt: string; channel?: ReleaseChannel;
   notes: { ru: readonly string[]; en: readonly string[] };
+  /** Desktop changelog; `notes` are Android's. Older manifests have only `notes`. */
+  desktopNotes?: { ru: readonly string[]; en: readonly string[] };
   artifacts: Partial<Record<UpdatePlatform, UpdateArtifact>>;
 }
 export interface SignedUpdate { schema: 1; payload: string; signature: string }
@@ -43,7 +45,8 @@ export async function verifyUpdate(text: string, publicKey = pinnedKey.publicKey
   try { manifest = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { throw new UpdateFailure('invalid'); }
   if (!manifest || manifest.schema !== 1 || typeof manifest.version !== 'string' || !/^\d+\.\d+\.\d+(?:-[a-z\d.-]+)?$/i.test(manifest.version) || !Number.isSafeInteger(manifest.versionCode) || manifest.versionCode < 1 || !Number.isFinite(Date.parse(manifest.publishedAt)) || !manifest.artifacts || typeof manifest.artifacts !== 'object') throw new UpdateFailure('invalid');
   if (manifest.channel !== undefined && manifest.channel !== 'stable' && manifest.channel !== 'beta') throw new UpdateFailure('invalid');
-  if (!manifest.notes || !['ru', 'en'].every(locale => { const notes = manifest.notes[locale as 'ru' | 'en']; return Array.isArray(notes) && notes.length <= 100 && notes.every(line => typeof line === 'string' && line.length <= 2000); })) throw new UpdateFailure('invalid');
+  const validNotes = (value: UpdateManifest['notes'] | undefined) => !!value && ['ru', 'en'].every(locale => { const notes = value[locale as 'ru' | 'en']; return Array.isArray(notes) && notes.length <= 100 && notes.every(line => typeof line === 'string' && line.length <= 2000); });
+  if (!validNotes(manifest.notes) || manifest.desktopNotes !== undefined && !validNotes(manifest.desktopNotes)) throw new UpdateFailure('invalid');
   for (const [platform, artifact] of Object.entries(manifest.artifacts)) {
     if (!['android', 'linux-appimage', 'windows'].includes(platform) || !artifact || !/^[a-z\d][a-z\d._-]{0,180}$/i.test(artifact.filename) || !Number.isSafeInteger(artifact.size) || artifact.size <= 0 || artifact.size > 512 * 1024 * 1024 || !/^[a-f\d]{64}$/i.test(artifact.sha256) || !Array.isArray(artifact.urls) || !artifact.urls.length || artifact.urls.length > 12 || !artifact.urls.every(https)) throw new UpdateFailure('invalid');
   }

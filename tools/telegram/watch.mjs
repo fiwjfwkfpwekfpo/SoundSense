@@ -29,7 +29,7 @@ async function checkReleases() {
     if (manifest.channel && manifest.channel !== channel) continue;
     const platforms = Object.keys(manifest.artifacts ?? {}), first = Object.values(manifest.artifacts ?? {})[0];
     await toBoth(releaseMessage({
-      version: manifest.version, channel, notes: manifest.notes ?? { ru: [], en: [] }, platforms,
+      version: manifest.version, channel, notes: manifest.notes ?? { ru: [], en: [] }, desktopNotes: manifest.desktopNotes, platforms,
       links: [...new Set(Object.values(manifest.artifacts ?? {}).map(artifact => artifact.urls?.[0]).filter(Boolean))],
       size: first ? (first.size / 1024 / 1024).toFixed(1) : '',
     }), 'releases');
