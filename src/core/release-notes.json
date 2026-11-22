@@ -1,29 +1,19 @@
 {
-  "version": "1.4.10",
+  "version": "1.4.11",
   "android": {
     "ru": [
-      "Исправлено: музыка в фоне больше не останавливается.",
-      "Добавлено: недоступный следующий трек проверяется заранее и пропускается плавным переходом.",
-      "Улучшено: воспроизведение при нестабильной сети."
+      "Техническое обновление вместе с версией для ПК."
     ],
     "en": [
-      "Fixed: music no longer stops in the background.",
-      "Added: an unavailable next track is checked in advance and skipped with a smooth transition.",
-      "Improved: playback on an unstable network."
+      "Technical update together with the desktop version."
     ]
   },
   "desktop": {
     "ru": [
-      "Добавлено: панель окна сверху — перетаскивание, свернуть, развернуть, закрыть.",
-      "Улучшено: плеер подстраивается под размер окна.",
-      "Добавлено: недоступный следующий трек проверяется заранее и пропускается плавным переходом.",
-      "Улучшено: воспроизведение при нестабильной сети."
+      "Исправлено: в низком окне обрезался низ — пропадал плеер и кнопки."
     ],
     "en": [
-      "Added: a window bar at the top — drag, minimize, maximize, close.",
-      "Improved: the player adapts to the window size.",
-      "Added: an unavailable next track is checked in advance and skipped with a smooth transition.",
-      "Improved: playback on an unstable network."
+      "Fixed: in a short window the bottom was cut off — the player and buttons disappeared."
     ]
   }
 }
