@@ -109,7 +109,8 @@
   .side-actions button[aria-pressed='true'] { color: var(--color-accent); border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 22%, var(--color-player-control-surface)); }
   .art-space { flex: 1 1 0; min-height: var(--space-8); container-type: size; display: flex; align-items: center; justify-content: center; padding: var(--space-4) 0 var(--space-5); }
   .playback { padding-bottom: var(--space-1); }
-  .controls { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); margin-top: var(--space-7); }
+  .controls { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); width: 100%; max-width: 440px; margin: var(--space-7) auto 0; }
+  /* A wide window: the buttons stay together in the middle instead of running to the edges. */
   .secondary { color: var(--color-text-muted); position: relative; }
   .enabled { color: var(--color-accent); }
   .enabled::after { position: absolute; bottom: calc(var(--space-1) / 2); left: 50%; transform: translateX(-50%); content: ''; width: var(--space-1); height: var(--space-1); background: var(--color-accent); border-radius: var(--radius-full); }
