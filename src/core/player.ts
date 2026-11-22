@@ -107,7 +107,22 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
   const later = (run: () => void, ms: number) => { if (hidden() && ms <= 1000) queueMicrotask(run); else setTimeout(run, ms); };
   const onVisibility = () => { if (!timer) return; clearInterval(timer); timer = setInterval(tick, tickEvery()); if (!hidden()) tick(); };
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibility);
-  const nextIndex = (): number | null => state.currentIndex + 1 < state.queue.length ? state.currentIndex + 1 : state.repeat === 'all' && state.queue.length > 1 ? 0 : null;
+  /*
+   * Queue entries found unplayable while the previous track was still playing (removed, region
+   * block, preview only…): the queue walks past them silently, so the engine arms a smooth
+   * transition straight to the one after.
+   */
+  const unplayable = new Set<string>();
+  const nextIndex = (): number | null => {
+    const length = state.queue.length;
+    for (let step = 1; step <= length; step++) {
+      let index = state.currentIndex + step;
+      if (index >= length) { if (state.repeat !== 'all' || length < 2) return null; index -= length; }
+      if (index === state.currentIndex) return null;
+      if (!unplayable.has(state.queue[index]!.id)) return index;
+    }
+    return null;
+  };
   function updateWaveforms() {
     const index = nextIndex();
     const targets = settings.getSnapshot().waveform === false ? [] : [...new Set([state.trackId, index === null ? undefined : state.queue[index]?.trackId].filter((id): id is string => !!id))];
@@ -129,7 +144,7 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
     }
   }
   async function prepareNext() {
-    const index = nextIndex(), nextId = index === null ? undefined : state.queue[index]?.trackId;
+    const index = nextIndex(), nextId = index === null ? undefined : state.queue[index]?.trackId, entryId = index === null ? '' : state.queue[index]!.id;
     // Waveform analysis never delays preparation of the next audio file.
     updateWaveforms();
     if (!nextId || state.crossfade || nextPrepared === nextId || nextPreparing?.id === nextId && nextPreparing.slot === other(active)) return;
@@ -138,13 +153,25 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
     if (processing) audio.processing?.(other(active), processingFor(track.id));
     const pending = nextPreparing = { id: nextId, slot: other(active), promise: audio.prepare(other(active), track, 'preload') };
     try { await pending.promise; if (token === buffering && !disposed) { nextPrepared = nextId; preloadFailed = 0; syncArm(); } }
-    catch { if (token === buffering && !disposed) notePreloadFailure(nextId); }
+    catch (error) { if (token === buffering && !disposed) notePreloadFailure(nextId, playbackFailureReason(error), entryId); }
     finally { if (nextPreparing === pending) nextPreparing = undefined; }
   }
   // A failed preload (network blip, expired link) is tried again a few times while that track is still next.
   // preloadFailed: when to try again (0 = nothing to retry).
   let preloadFailed = 0, preloadFailures = { id: '', count: 0 };
-  function notePreloadFailure(id: string) { preloadFailures = preloadFailures.id === id ? { id, count: preloadFailures.count + 1 } : { id, count: 1 }; preloadFailed = preloadFailures.count < 5 ? performance.now() + 8000 : 0; }
+  function notePreloadFailure(id: string, reason: string = 'network', entryId = '') {
+    preloadFailures = preloadFailures.id === id ? { id, count: preloadFailures.count + 1 } : { id, count: 1 };
+    // Gone for good (or failing again with a fresh link): skip it now and check the one after.
+    const permanent = ['region', 'protected', 'preview', 'unavailable', 'unsupported', 'file'].includes(reason) || ['auth', 'decoder'].includes(reason) && preloadFailures.count >= 2;
+    if (permanent && entryId && state.queue.some(item => item.id === entryId)) {
+      unplayable.add(entryId); preloadFailed = 0;
+      diagnostics?.record('player', 'skip.preload', { trackId: id, reason }, 'warn');
+      queueMicrotask(() => { if (!disposed) void prepareNext(); });
+      return;
+    }
+    // Network trouble is retried while the track is next, with growing pauses.
+    preloadFailed = preloadFailures.count < 8 ? performance.now() + Math.min(30_000, 4000 * preloadFailures.count) : 0;
+  }
   // Loudness normalization: bring every track to about -14 dBFS RMS (cut up to 9 dB, boost up to 6 dB).
   const loudness = new Map<string, number>(), TARGET = -14;
   function normalizationGain(id: string): number {
@@ -169,12 +196,20 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
   function syncLoop() { audio.loop?.(active, state.repeat === 'one'); audio.loop?.(other(active), false); }
   // Up to three silent retries per track in five minutes; returns the pause before the retry (0 = give up).
   const retries = new Map<string, { since: number; count: number }>();
+  // A dropped connection gets more patience (about two minutes) than a broken link.
   function retry(id: string, reason: string): number {
     if (!['auth', 'network', 'timeout', 'decoder', 'unavailable'].includes(reason)) return 0;
     let entry = retries.get(id); if (!entry || Date.now() - entry.since > 300_000) entry = { since: Date.now(), count: 0 };
-    if (entry.count >= 3) return 0;
+    const delays = ['network', 'timeout'].includes(reason) ? [700, 2000, 5000, 10_000, 20_000, 30_000, 45_000] : [700, 3000, 8000];
+    if (entry.count >= delays.length) return 0;
     entry.count++; retries.delete(id); retries.set(id, entry); if (retries.size > 50) retries.delete(retries.keys().next().value!);
-    return [700, 3000, 8000][entry.count - 1]!;
+    return delays[entry.count - 1]!;
+  }
+  /** Wait the pause, but go at once when the connection comes back. */
+  function retryLater(run: () => void, ms: number) {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined' || navigator.onLine !== false) { later(run, ms); return; }
+    let done = false; const go = () => { if (done) return; done = true; window.removeEventListener('online', go); run(); };
+    window.addEventListener('online', go); setTimeout(go, Math.max(ms, 60_000));
   }
   let skipped = 0;
   function cancelOverlap() { if (state.crossfade) audio.stop(other(active)); state = { ...state, crossfade: undefined }; overlapEnd = 0; }
@@ -199,7 +234,7 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
       const selected = active;
       await Promise.all([reuseNext ? Promise.resolve() : pendingNext ? pendingNext.catch(error => { if (token !== generation || disposed) throw error; return audio.prepare(selected, track, 'play'); }) : audio.prepare(active, track, 'play'), minimumFade]);
       if (token !== generation || disposed) return;
-      audio.stop(old); prepared = track.id; syncLoop(); skipped = 0;
+      audio.stop(old); prepared = track.id; syncLoop(); skipped = 0; unplayable.delete(item.id);
       if (fixed?.id === track.id) fixed.at = performance.now();
       if (state.playing) { audio.gain(active, 1); audio.start(active, state.position); }
       diagnostics?.record('player', 'prepare.ready', { trackId: track.id, ms: Math.round(performance.now() - started) });
@@ -209,12 +244,12 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
       const reason = playbackFailureReason(error);
       // Stream links expire and networks blip: one silent retry with a freshly resolved link first.
       const wait = retry(track.id, reason);
-      if (wait) { diagnostics?.record('player', 'prepare.retry', { trackId: track.id, reason }); audio.stop(old); prepared = ''; later(() => { if (token === generation && !disposed) void change(index, playing, false, direction, position, automatic); }, wait); return; }
+      if (wait) { diagnostics?.record('player', 'prepare.retry', { trackId: track.id, reason }); audio.stop(old); prepared = ''; retryLater(() => { if (token === generation && !disposed) void change(index, playing, false, direction, position, automatic); }, wait); return; }
       diagnostics?.record('player', 'prepare.failed', { trackId: track.id, title: track.title, reason, ms: Math.round(performance.now() - started), ...errorDetails(error) }, 'error');
       audio.stop(old);
       // The queue moved here by itself and this track cannot be played: go on to the next one (not when the network is down).
       const following = nextIndex();
-      if (automatic && playing && following !== null && following !== index && skipped < 3 && !['network', 'timeout'].includes(reason)) { skipped++; diagnostics?.record('player', 'skip.unplayable', { trackId: track.id, reason }, 'warn'); state = { ...state, notice: { id: ++noticeId, key: `player.error.${reason}` } }; void change(following, true, false, 1, 0, true); return; }
+      if (automatic && playing && following !== null && following !== index && skipped < 3 && !['network', 'timeout'].includes(reason)) { skipped++; unplayable.add(item.id); diagnostics?.record('player', 'skip.unplayable', { trackId: track.id, reason }, 'warn'); state = { ...state, notice: { id: ++noticeId, key: `player.error.${reason}` } }; void change(following, true, false, 1, 0, true); return; }
       publish({ ...state, playing: false, resolving: false, notice: { id: ++noticeId, key: `player.error.${reason}` } });
     }
   }
@@ -277,15 +312,15 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
     if (event.type === 'error' && event.slot && event.slot !== active) {
       // The preloaded next track failed (expired link, network): forget it, so nothing switches to a dead slot.
       if (state.crossfade) return;
-      const id = nextPrepared || nextPreparing?.id;
-      if (id) { nextPrepared = ''; nextPreparing = undefined; buffering++; audio.stop(other(active)); notePreloadFailure(id); syncArm(); }
+      const id = nextPrepared || nextPreparing?.id, index = nextIndex(), entryId = index !== null && state.queue[index]?.trackId === id ? state.queue[index]!.id : '';
+      if (id) { nextPrepared = ''; nextPreparing = undefined; buffering++; audio.stop(other(active)); notePreloadFailure(id, event.reason ?? 'network', entryId); syncArm(); }
     }
     else if (event.type === 'error') {
       const id = state.trackId, reason = (event.reason ?? 'decoder') as import('./types').PlaybackFailureReason;
       if (!state.playing && !state.resolving) return;
       // A 403 from an expired CDN link is reported as "auth"; re-resolve and continue from the same place.
       const wait = id ? retry(id, reason) : 0;
-      if (id && wait) { const index = state.currentIndex, position = state.position, token = ++generation; diagnostics?.record('player', 'stream.retry', { trackId: id, reason, position }); prepared = ''; later(() => { if (token === generation && !disposed && state.trackId === id) void change(index, true, false, 1, position); }, wait === 700 ? 0 : wait); return; }
+      if (id && wait) { const index = state.currentIndex, position = state.position, token = ++generation; diagnostics?.record('player', 'stream.retry', { trackId: id, reason, position }); prepared = ''; retryLater(() => { if (token === generation && !disposed && state.trackId === id) void change(index, true, false, 1, position); }, wait === 700 ? 0 : wait); return; }
       audio.pause(active); publish({ ...state, playing: false, resolving: false, notice: { id: ++noticeId, key: `player.error.${reason}` } });
     }
     // The engine reached the end and had nothing armed: move on now, without waiting for a (throttled) timer.
@@ -307,7 +342,7 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
       return { position: Math.min(duration, clock && !clock.buffering ? clock.position : state.position), rate: clock?.rate ?? 1, playing: running && !!clock && !clock.buffering && !clock.ended };
     },
     getSnapshot: () => state, subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
-    play(ids, index = 0) { const queue = ids.filter(id => library.getTrack(id)).map(entry); if (!queue.length) return; originalOrder = null; state = { ...state, queue, shuffle: false }; void change(Math.max(0, Math.min(queue.length - 1, index)), true); },
+    play(ids, index = 0) { const queue = ids.filter(id => library.getTrack(id)).map(entry); if (!queue.length) return; originalOrder = null; unplayable.clear(); state = { ...state, queue, shuffle: false }; void change(Math.max(0, Math.min(queue.length - 1, index)), true); },
     toggle() {
       if (!state.trackId) return;
       if (state.playing) { audio.pause(active); audio.pause(other(active)); publish({ ...state, playing: false }); }

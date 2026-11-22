@@ -57,4 +57,12 @@ describe('core player', () => {
     player.play(['a', 'b', 'c']); await flush(); emit({ type: 'ended', slot: 'b' }); await vi.advanceTimersByTimeAsync(20_000);
     expect(player.getSnapshot().trackId).toBe('c'); expect(player.getSnapshot().playing).toBe(true); player.dispose();
   });
+  it('checks the next track while the current one plays and prepares the one after it instead', async () => {
+    const { player, emit, calls } = setup({ fail: new Set(['b']) });
+    player.play(['a', 'b', 'c']); await flush();
+    // b is gone: c is already prepared in the free slot while a still plays.
+    expect(calls).toContain('prepare:a:b'); expect(calls).toContain('prepare:a:c'); expect(player.getSnapshot().trackId).toBe('a');
+    const before = calls.length; emit({ type: 'ended', slot: 'b' }); await flush();
+    expect(player.getSnapshot().trackId).toBe('c'); expect(calls.slice(before).filter(call => call.startsWith('prepare'))).toEqual([]); player.dispose();
+  });
 });

@@ -220,9 +220,22 @@ public class AudioPlaybackService extends Service {
             .setPrioritizeTimeOverSizeThresholds(true)
             .build();
     }
+    /**
+     * A flaky network (tunnel, lift, Wi-Fi to mobile hand-over) is retried for about a minute
+     * while the buffer keeps playing, instead of three quick attempts. HTTP errors such as 403/404
+     * are still final at once: those links need a fresh resolve in the app.
+     */
+    private androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy retryPolicy() {
+        return new androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(12) {
+            @Override public long getRetryDelayMsFor(LoadErrorInfo info) {
+                long base = super.getRetryDelayMsFor(info);
+                return base == C.TIME_UNSET ? base : Math.min(8000, 1000L * info.errorCount);
+            }
+        };
+    }
     private void prepareStream(Slot target, Uri uri) {
         MusicCache.get(this).touch(target.trackId, uri.toString(), target.sourceHeaders);
-        ExoPlayer stream = new ExoPlayer.Builder(this, renderers()).setLooper(audio.getLooper()).setLoadControl(loadControl()).setMediaSourceFactory(new DefaultMediaSourceFactory(MusicCache.get(this).source(target.trackId, target.offline))).build();
+        ExoPlayer stream = new ExoPlayer.Builder(this, renderers()).setLooper(audio.getLooper()).setLoadControl(loadControl()).setMediaSourceFactory(new DefaultMediaSourceFactory(MusicCache.get(this).source(target.trackId, target.offline)).setLoadErrorHandlingPolicy(retryPolicy())).build();
         target.stream = stream;
         applyProcessing(target); applyLoop(target);
         stream.setAudioAttributes(new androidx.media3.common.AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), false);
