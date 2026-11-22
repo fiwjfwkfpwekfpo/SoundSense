@@ -1,19 +1,19 @@
 {
-  "version": "1.4.12",
+  "version": "1.4.13",
   "android": {
     "ru": [
-      "Техническое обновление вместе с версией для ПК."
+      "Исправлено: синхронизация между устройствами — теперь работает и там, где закрыт сервер PeerJS."
     ],
     "en": [
-      "Technical update together with the desktop version."
+      "Fixed: device sync now works where the PeerJS server is blocked."
     ]
   },
   "desktop": {
     "ru": [
-      "Исправлено: кнопки плеера больше не разъезжаются в широком окне."
+      "Исправлено: синхронизация между устройствами — теперь работает и там, где закрыт сервер PeerJS."
     ],
     "en": [
-      "Fixed: player buttons no longer spread apart in a wide window."
+      "Fixed: device sync now works where the PeerJS server is blocked."
     ]
   }
 }
