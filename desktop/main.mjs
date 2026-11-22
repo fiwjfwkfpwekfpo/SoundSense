@@ -151,7 +151,10 @@ function registerIpc() {
 let closing = false;
 function createWindow() {
   window = new BrowserWindow({
-    width: 460, height: 900, minWidth: 360, minHeight: 560,
+    width: 460, height: 900,
+    // Small minimums: a tiling compositor (Hyprland) ignores them, and Chromium then lays the page out
+    // at the minimum size and crops it — the bottom (player bar, controls) disappears.
+    minWidth: 320, minHeight: 360,
     backgroundColor: '#101010', title: 'SoundSense', show: false, autoHideMenuBar: true, frame: false,
     ...(ICON ? { icon: ICON } : {}),
     webPreferences: { preload: join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false,
