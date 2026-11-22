@@ -31,6 +31,7 @@ import './ui/appearance/motion/effects.css';
 import { defaultSettings, settingsSchema } from './ui/settings/schema';
 import { createSync } from './core/sync/engine';
 import { peerTransport } from './platform/sync-transport';
+import { combinedTransport, relayTransport } from './platform/relay-transport';
 import { createLibrary } from './core/library';
 import { createPlayer } from './core/player';
 import { createSettings } from './core/settings';
@@ -145,7 +146,7 @@ if (DEBUG_TOOLS && import.meta.env.DEV && new URLSearchParams(location.search).g
   // Device sync: on when this device has joined a group (Settings → Sync).
   if (typeof RTCPeerConnection !== 'undefined' && typeof crypto?.subtle !== 'undefined') {
     const syncedSettings = settingsSchema.filter(definition => definition.sync).map(definition => definition.key);
-    api.sync = createSync({ library, settings, storage, open: peerTransport(), diagnostics, syncedSettings: () => syncedSettings,
+    api.sync = createSync({ library, settings, storage, open: combinedTransport(relayTransport(), peerTransport()), diagnostics, syncedSettings: () => syncedSettings,
       device: { name: desktop?.hostname ? `${translate(String(settings.getSnapshot().language), 'sync.name.desktop')} ${desktop.hostname}` : translate(String(settings.getSnapshot().language), desktop ? 'sync.name.desktop' : PLATFORM === 'android' ? 'sync.name.phone' : 'sync.name.web'), kind: desktop ? 'desktop' : PLATFORM === 'android' ? 'phone' : 'web' },
       nowPlaying: () => { const state = player.getSnapshot(), track = state.trackId ? library.getTrack(state.trackId) : undefined; return track ? { track, position: player.livePosition?.().position ?? state.position, playing: state.playing } : null; },
       subscribePlayer: listener => player.subscribe(listener),
