@@ -1,25 +1,29 @@
 {
-  "version": "1.4.9",
-  "ru": [
-    "Исправлено: проверка и загрузка обновлений там, где GitHub недоступен напрямую (запасные адреса: GitHub API, jsDelivr, файлы релиза).",
-    "Каталог плагинов загружается через те же запасные адреса.",
-    "Кнопка «Перемешать» в «Мне нравится» и плейлистах показывает, включено ли перемешивание, и переключает его."
-  ],
-  "en": [
-    "Fixed: checking and downloading updates where GitHub is not reachable directly (fallback addresses: GitHub API, jsDelivr, release files).",
-    "The plugin catalog loads through the same fallback addresses.",
-    "The Shuffle button in Liked and playlists shows whether shuffle is on and toggles it."
-  ],
-  "channel": {
+  "version": "1.4.10",
+  "android": {
     "ru": [
-      "Исправлено: проверка и загрузка обновлений там, где GitHub недоступен напрямую (запасные адреса: GitHub API, jsDelivr, файлы релиза).",
-      "Каталог плагинов загружается через те же запасные адреса.",
-      "Кнопка «Перемешать» в «Мне нравится» и плейлистах показывает, включено ли перемешивание, и переключает его."
+      "Исправлено: музыка в фоне больше не останавливается.",
+      "Добавлено: недоступный следующий трек проверяется заранее и пропускается плавным переходом.",
+      "Улучшено: воспроизведение при нестабильной сети."
     ],
     "en": [
-      "Fixed: checking and downloading updates where GitHub is not reachable directly (fallback addresses: GitHub API, jsDelivr, release files).",
-      "The plugin catalog loads through the same fallback addresses.",
-      "The Shuffle button in Liked and playlists shows whether shuffle is on and toggles it."
+      "Fixed: music no longer stops in the background.",
+      "Added: an unavailable next track is checked in advance and skipped with a smooth transition.",
+      "Improved: playback on an unstable network."
+    ]
+  },
+  "desktop": {
+    "ru": [
+      "Добавлено: панель окна сверху — перетаскивание, свернуть, развернуть, закрыть.",
+      "Улучшено: плеер подстраивается под размер окна.",
+      "Добавлено: недоступный следующий трек проверяется заранее и пропускается плавным переходом.",
+      "Улучшено: воспроизведение при нестабильной сети."
+    ],
+    "en": [
+      "Added: a window bar at the top — drag, minimize, maximize, close.",
+      "Improved: the player adapts to the window size.",
+      "Added: an unavailable next track is checked in advance and skipped with a smooth transition.",
+      "Improved: playback on an unstable network."
     ]
   }
 }
