@@ -1,5 +1,5 @@
 {
-  "version": "1.4.11",
+  "version": "1.4.12",
   "android": {
     "ru": [
       "Техническое обновление вместе с версией для ПК."
@@ -10,10 +10,10 @@
   },
   "desktop": {
     "ru": [
-      "Исправлено: в низком окне обрезался низ — пропадал плеер и кнопки."
+      "Исправлено: кнопки плеера больше не разъезжаются в широком окне."
     ],
     "en": [
-      "Fixed: in a short window the bottom was cut off — the player and buttons disappeared."
+      "Fixed: player buttons no longer spread apart in a wide window."
     ]
   }
 }
