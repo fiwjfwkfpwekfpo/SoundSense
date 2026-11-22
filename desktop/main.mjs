@@ -136,6 +136,14 @@ function registerIpc() {
   handle('updates:download', (id, artifact) => updater.download(String(id), artifact));
   handle('updates:cancel', id => updater.cancel(String(id)));
   handle('updates:install', token => updater.install(String(token)));
+  // Own title bar (the window is frameless): drag strip and buttons live in the page.
+  ipcMain.on('window:control', (event, command) => {
+    if (!trusted(event.senderFrame) || !window) return;
+    if (command === 'minimize') window.minimize();
+    else if (command === 'maximize') { if (window.isMaximized()) window.unmaximize(); else window.maximize(); }
+    else if (command === 'close') window.close();
+  });
+  ipcMain.on('window:maximized', event => { event.returnValue = trusted(event.senderFrame) && !!window?.isMaximized(); });
   // The window asks to be closed for real after it has written pending state.
   ipcMain.on('window:flushed', event => { if (trusted(event.senderFrame)) void state.flush().finally(() => { log('state flushed, closing'); closing = true; window?.close(); }); });
 }
@@ -144,7 +152,7 @@ let closing = false;
 function createWindow() {
   window = new BrowserWindow({
     width: 460, height: 900, minWidth: 360, minHeight: 560,
-    backgroundColor: '#101010', title: 'SoundSense', show: false, autoHideMenuBar: true,
+    backgroundColor: '#101010', title: 'SoundSense', show: false, autoHideMenuBar: true, frame: false,
     ...(ICON ? { icon: ICON } : {}),
     webPreferences: { preload: join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false,
       // Crossfades and track changes are driven by timers in the window; a hidden or
@@ -162,6 +170,7 @@ function createWindow() {
     setTimeout(() => { closing = true; window?.close(); }, 2500); // A frozen window must not keep the app open.
   });
   window.on('closed', () => { window = undefined; });
+  for (const name of ['maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) window.on(name, () => window?.webContents.send('window:maximized', window.isMaximized() || window.isFullScreen()));
   void window.loadURL(DEV_URL ?? `${ORIGIN}/`);
 }
 

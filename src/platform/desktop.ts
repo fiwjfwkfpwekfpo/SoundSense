@@ -43,6 +43,8 @@ export interface DesktopBridge {
     cancel(id: string): Promise<void>; install(token: string): Promise<'opened'>;
     onProgress(listener: (value: { id: string; bytes: number }) => void): () => void;
   };
+  /** Frameless window controls for the app's own title bar. Absent in the browser stand-in. */
+  window?: { minimize(): void; toggleMaximize(): void; close(): void; maximized(): boolean; onMaximized(listener: (maximized: boolean) => void): () => void };
   /** Called before the window closes; pending state must be handed over before it resolves. */
   onFlush(handler: () => void | Promise<void>): void;
 }

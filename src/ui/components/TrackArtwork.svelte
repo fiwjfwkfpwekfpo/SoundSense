@@ -65,7 +65,8 @@
 </div>
 {/if}
 <style>
-  .art-stack { position: relative; width: min(58vw, 250px); aspect-ratio: 1; max-height: 100%; border-radius: var(--radius-l); isolation: isolate; touch-action: none; will-change: transform; }
+  /* The cover fits the free space of the player in both directions (container: .art-space). */
+  .art-stack { position: relative; width: min(58vw, 250px, calc(100cqh - var(--space-3))); aspect-ratio: 1; max-height: 100%; border-radius: var(--radius-l); isolation: isolate; touch-action: none; will-change: transform; }
   .current, .outgoing, .stack-back { position: absolute; inset: 0; border-radius: inherit; box-shadow: var(--shadow-nav); }
   .current { z-index: 1; will-change: transform, opacity; overflow: hidden; }
   /* After a vertical drag the cover springs back; during a drag it follows the finger exactly. */

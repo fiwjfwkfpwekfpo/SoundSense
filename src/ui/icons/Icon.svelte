@@ -1,7 +1,7 @@
 <script lang="ts">
   import { playPause, generalEffect } from '../appearance/motion/runtime';
   import { untrack } from 'svelte';
-  export type IconName = 'home' | 'heart' | 'search' | 'settings' | 'bell' | 'chevron-right' | 'chevron-left' | 'chevron-down' | 'more' | 'more-vertical' | 'play' | 'pause' | 'next' | 'previous' | 'shuffle' | 'repeat' | 'repeat-one' | 'lyrics' | 'queue' | 'plus' | 'download' | 'artist' | 'share' | 'close' | 'check' | 'sort' | 'clock' | 'music' | 'folder' | 'sliders' | 'grip' | 'up' | 'down' | 'sun' | 'moon' | 'arrow-up-right' | 'library' | 'volume';
+  export type IconName = 'home' | 'heart' | 'search' | 'settings' | 'bell' | 'chevron-right' | 'chevron-left' | 'chevron-down' | 'more' | 'more-vertical' | 'play' | 'pause' | 'next' | 'previous' | 'shuffle' | 'repeat' | 'repeat-one' | 'lyrics' | 'queue' | 'plus' | 'download' | 'artist' | 'share' | 'close' | 'check' | 'sort' | 'clock' | 'music' | 'folder' | 'sliders' | 'grip' | 'up' | 'down' | 'sun' | 'moon' | 'arrow-up-right' | 'library' | 'volume' | 'window-minimize' | 'window-maximize' | 'window-restore';
   let { name, size = 'm', filled = false }: { name: IconName; size?: 's' | 'm' | 'l'; filled?: boolean } = $props();
   let spark = $state(false); let sparkVersion = $state(0); let previous = untrack(() => filled);
   $effect(() => { spark = false; if (name === 'heart' && filled && !previous && generalEffect('like-sparks')) { spark = true; sparkVersion = untrack(() => sparkVersion) + 1; const timer = setTimeout(() => spark = false, 650); previous = filled; return () => clearTimeout(timer); } previous = filled; });
@@ -30,6 +30,7 @@
     moon: 'M21 13A9 9 0 0 1 11 3a9 9 0 1 0 10 10Z',
     'arrow-up-right': 'M6 18 18 6M6 6h12v12', library: 'M4 3v18M9 3v18m5-17 6 16',
     volume: 'm3 9 5 0 5-5v16l-5-5H3Zm14-2a7 7 0 0 1 0 10m3-13a11 11 0 0 1 0 16',
+    'window-minimize': 'M6 12h12', 'window-maximize': 'M6 6h12v12H6Z', 'window-restore': 'M6 9h9v9H6ZM9 9V6h9v9h-3',
   };
 </script>
 <svg class:small={size === 's'} class:large={size === 'l'} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

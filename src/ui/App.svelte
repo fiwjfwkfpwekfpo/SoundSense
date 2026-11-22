@@ -31,6 +31,8 @@
   import Lyrics from './screens/Lyrics.svelte';
   import Dock from './components/Dock.svelte';
   import SideNav from './components/SideNav.svelte';
+  import TitleBar from './components/TitleBar.svelte';
+  import { desktop } from '../platform/desktop';
   import { isDesktop } from '../platform/desktop';
   import { layout } from './layout.svelte';
   import ActionSheets from './components/ActionSheets.svelte';
@@ -156,7 +158,7 @@
   onMount(() => bindHorizontalScroll());
   onMount(() => { const failed = () => ui.notify('settings.storageUnavailable'); window.addEventListener('app:storage-error', failed); return () => window.removeEventListener('app:storage-error', failed); });
 </script>
-<div class="stage"><div class="device" class:nav-left={sideNav && !onboarding} class:wide={wide && !onboarding} data-testid="app-shell">
+<div class="stage"><div class="device" class:nav-left={sideNav && !onboarding} class:wide={wide && !onboarding} class:framed={!!desktop?.window} data-testid="app-shell">
   <PaletteSpread />
   <main bind:this={scrollElement} class="main-scroll" inert={onboarding || !!ui.nav.overlay || !!ui.nav.state.sheet} aria-hidden={onboarding || !!ui.nav.overlay || !!ui.nav.state.sheet ? 'true' : undefined}>
     <ScreenState>{#key `${route.name}-${'id' in route ? route.id : route.name === 'library' ? route.tab : route.name === 'import' ? `${route.source ?? ''}:${route.link ?? ''}:${route.destination ?? ''}` : ''}`}
@@ -176,6 +178,7 @@
   {#if DEBUG_TOOLS && ui.profiler?.recording}<div class="rec-pill" data-profiler role="status"><span class="rec-dot"></span><span>{ui.t('profile.recording', { actions: ui.profiler.actions })}</span><button onclick={() => { const summary = ui.profiler?.stop(); if (summary) ui.notify('profile.saved', { p95: summary.p95, janky: summary.janky }, () => ui.nav.go({ name: 'diagnostics' })); }}>{ui.t('profile.stop')}</button></div>{/if}
   {#if TraceHud && ui.trace?.hud && (ui.trace.clock || ui.trace.beat)}<TraceHud />{/if}
   <ActionSheets />
+  <TitleBar />
   {#if !ui.settings.values.onboardingDone}<Onboarding />{/if}
   {#if ui.toast}<div class="toast" role="status">{ui.toast}{#if ui.toastAction}<button onclick={() => ui.toastAction?.()}>{ui.t('import.openResult')}</button>{/if}</div>{/if}
 </div></div>
@@ -187,6 +190,8 @@
   .main-scroll::-webkit-scrollbar { display: none; }
   .dock-host.covered { visibility: hidden; }
   .device { --side-nav-width: 0px; }
+  /* Frameless desktop window: everything starts under the app's own title bar. */
+  .device.framed { --inset-top: var(--titlebar-height); }
   .device.nav-left { --side-nav-width: 216px; }
   .device.nav-left .main-scroll { left: calc(var(--side-nav-width) + var(--inset-left)); }
   @media (max-width: 760px) { .device.nav-left { --side-nav-width: calc(var(--touch-size) + var(--space-4)); } }

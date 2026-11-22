@@ -43,6 +43,7 @@
   --switch-width: 42px; --switch-height: 26px; --switch-knob: 20px; --switch-inset: 3px;
   --sheet-max-height: 86%; --sheet-handle-width: calc(var(--space-8) + var(--space-1) / 2); --sheet-handle-height: var(--space-1);
   --lyrics-line-height: 1.5; --lyrics-scroll-padding: calc(var(--space-5) * 9);
+  --titlebar-height: 32px;
   --z-content: 1; --z-dock: 10; --z-player: 20; --z-overlay: 30; --z-toast: 40;
   --opacity-full: 1; --opacity-hidden: 0; --transform-press: .97; --transform-enter: var(--space-3);
   --opacity-terrain-step: .05; --opacity-wave-mirror: .35; --opacity-wave-ghost: .45;

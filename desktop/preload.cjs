@@ -33,5 +33,12 @@ contextBridge.exposeInMainWorld('soundsenseDesktop', {
     download: (id, artifact) => call('updates:download', id, artifact), cancel: id => call('updates:cancel', id), install: token => call('updates:install', token),
     onProgress(listener) { const handler = (_event, value) => listener(value); ipcRenderer.on('updates:progress', handler); return () => ipcRenderer.removeListener('updates:progress', handler); },
   },
+  window: {
+    minimize: () => ipcRenderer.send('window:control', 'minimize'),
+    toggleMaximize: () => ipcRenderer.send('window:control', 'maximize'),
+    close: () => ipcRenderer.send('window:control', 'close'),
+    maximized: () => ipcRenderer.sendSync('window:maximized') === true,
+    onMaximized(listener) { const handler = (_event, value) => listener(value === true); ipcRenderer.on('window:maximized', handler); return () => ipcRenderer.removeListener('window:maximized', handler); },
+  },
   onFlush(handler) { flushHandler = typeof handler === 'function' ? handler : null; },
 });

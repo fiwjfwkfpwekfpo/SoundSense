@@ -741,5 +741,9 @@
   "settings.soundOpen": "Открыть настройки звука",
   "settings.soundPresets": "Пресеты и обработка",
   "settings.open": "Открыть",
-  "settings.clear": "Очистить"
+  "settings.clear": "Очистить",
+  "window.minimize": "Свернуть",
+  "window.maximize": "Развернуть",
+  "window.restore": "Восстановить",
+  "window.close": "Закрыть"
 }

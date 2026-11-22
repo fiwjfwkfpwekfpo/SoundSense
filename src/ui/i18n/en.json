@@ -741,5 +741,9 @@
   "settings.soundOpen": "Open sound settings",
   "settings.soundPresets": "Presets and processing",
   "settings.open": "Open",
-  "settings.clear": "Clear"
+  "settings.clear": "Clear",
+  "window.minimize": "Minimize",
+  "window.maximize": "Maximize",
+  "window.restore": "Restore",
+  "window.close": "Close"
 }
