@@ -77,11 +77,31 @@ describe('desktop updater', () => {
     const pending = updater.download('a', artifact(next)); await vi.waitFor(() => expect(slow).toHaveBeenCalled());
     updater.cancel('a'); await expect(pending).rejects.toThrow();
     const dev = createUpdater({ cache, fetch: (async () => reply(next)) as never });
-    expect(dev.available()).toBe(false); await expect(dev.download('b', artifact(next))).rejects.toThrow(/AppImage/);
+    expect(dev.available()).toBe(false); await expect(dev.download('b', artifact(next))).rejects.toThrow(/cannot update itself/);
   });
 
   it('cleanEnv removes the old mount from the environment', () => {
     expect(cleanEnv({ PATH: '/tmp/.mount_a/usr/bin:/usr/bin', APPDIR: '/tmp/.mount_a', ARGV0: 'x', OWD: '/', HOME: '/h' })).toEqual({ PATH: '/usr/bin', HOME: '/h' });
     expect(cleanEnv({ HOME: '/h' })).toEqual({ HOME: '/h' });
+  });
+
+  it('Windows: runs the downloaded installer silently and quits; a portable build does not update', async () => {
+    // A minimal PE: "MZ", e_lfanew = 64, "PE\0\0" at 64.
+    const exe = Buffer.alloc(4096, 'w'); exe.write('MZ', 0, 'latin1'); exe.writeUInt32LE(64, 60); Buffer.from([0x50, 0x45, 0, 0]).copy(exe, 64);
+    const setup = { filename: 'SoundSense-1.5.0-beta-windows-x64-setup.exe', size: exe.length, sha256: sha(exe), urls: ['https://example.test/setup.exe'] };
+    const quit = vi.fn(), spawnFile = vi.fn(() => ({ unref() {} }));
+    const updater = createUpdater({ cache, windowsInstall: true, fetch: (async () => reply(exe)) as never, quit, spawnFile: spawnFile as never });
+    expect(updater.available()).toBe(true);
+    await expect(updater.download('x', artifact(image('n')))).rejects.toThrow();
+    const token = await updater.download('job', setup);
+    expect(await updater.install(token)).toBe('opened');
+    const [file, args, options] = spawnFile.mock.calls[0] as unknown as [string, string[], { detached: boolean }];
+    expect(file).toBe(join(cache, 'updates', setup.filename)); expect(args).toEqual(['--updated', '/S', '--force-run']); expect(options.detached).toBe(true);
+    expect(quit).toHaveBeenCalled();
+    // Not a Windows executable: never started.
+    const fake = Buffer.alloc(4096, 'x'), bad = createUpdater({ cache, windowsInstall: true, fetch: (async () => reply(fake)) as never, quit: vi.fn(), spawnFile: spawnFile as never });
+    await expect(bad.install(await bad.download('b', { ...setup, size: fake.length, sha256: sha(fake) }))).rejects.toThrow();
+    expect(spawnFile).toHaveBeenCalledTimes(1);
+    expect(createUpdater({ cache, fetch: (async () => reply(exe)) as never }).available()).toBe(false);
   });
 });

@@ -752,5 +752,7 @@
   "lyricsSources.up": "Move {name} up",
   "lyricsSources.down": "Move {name} down",
   "setting.liveCoversYandex": "Videos from Yandex Music",
-  "setting.liveCoversYandexHint": "The track's live cover from Yandex Music. Needs a Yandex sign-in; without it Apple Music is used."
+  "setting.liveCoversYandexHint": "The track's live cover from Yandex Music. Needs a Yandex sign-in; without it Apple Music is used.",
+  "update.manualHint": "This build does not update itself. Download the new version from the releases page.",
+  "update.openReleases": "Open the releases page"
 }

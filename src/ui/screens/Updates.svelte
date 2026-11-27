@@ -10,6 +10,8 @@
   let release = $derived(ui.updateState);
   // Each platform has its own changelog: desktop changes never show up on Android and back.
   const desktopApp = isDesktop();
+  // Builds that cannot replace themselves (Windows portable) get the release page instead.
+  const RELEASES_PAGE = 'https://github.com/fiwjfwkfpwekfpo/SoundSense/releases/latest';
   let notes = $derived.by(() => { const locale = ui.locale === 'en' ? 'en' : 'ru', manifest = release?.manifest; return (desktopApp ? manifest?.desktopNotes ?? manifest?.notes : manifest?.notes)?.[locale] ?? releaseNotes[desktopApp ? 'desktop' : 'android'][locale]; });
 </script>
 <section class="screen updates-screen" aria-label={ui.t('update.title')}>
@@ -23,6 +25,7 @@
       {#if release.phase === 'downloading'}<progress value={release.downloaded} max={Math.max(1, release.total)} aria-label={ui.t('update.downloading')}></progress><p>{Math.round(release.downloaded / Math.max(1, release.total) * 100)}%</p><Button variant="secondary" wide onclick={() => ui.api.updates?.cancel()}>{ui.t('common.cancel')}</Button>
       {:else if ['ready','permission'].includes(release.phase)}<Button wide onclick={() => ui.api.updates?.install()}>{ui.t('update.install')}</Button>
       {:else if release.phase === 'available' && ui.api.updates.supported}<Button wide onclick={() => ui.api.updates?.download()}>{ui.t('update.download')}</Button>
+      {:else if release.phase === 'available' && desktopApp}<p>{ui.t('update.manualHint')}</p><Button wide onclick={() => window.open(RELEASES_PAGE, '_blank')}>{ui.t('update.openReleases')}</Button>
       {:else if !['checking','installing'].includes(release.phase)}<Button wide onclick={() => ui.api.updates?.check()}>{ui.t('update.check')}</Button>{/if}
       {#if ['checking','installing'].includes(release.phase)}<div role="status" class="busy">{ui.t('common.loading')}</div>{/if}
       <p class="small">{ui.t('update.signedHint')}</p>

@@ -23,6 +23,13 @@ if (process.env.SS_LINUX_APPIMAGE) {
   payload.desktopNotes = pick('desktop');
   payload.artifacts['linux-appimage'] = { filename: basename(file), size: statSync(file).size, sha256: createHash('sha256').update(readFileSync(file)).digest('hex'), urls: [url] };
 }
+// Windows x64: the installer (the portable build has no self-update), also a GitHub Release asset.
+if (process.env.SS_WINDOWS_SETUP) {
+  const file = process.env.SS_WINDOWS_SETUP, url = process.env.SS_WINDOWS_URL;
+  if (!/^https:\/\//.test(url ?? '')) throw new Error('SS_WINDOWS_URL must be an https address');
+  payload.desktopNotes = pick('desktop');
+  payload.artifacts['windows-x64'] = { filename: basename(file), size: statSync(file).size, sha256: createHash('sha256').update(readFileSync(file)).digest('hex'), urls: [url] };
+}
 const bytes = Buffer.from(JSON.stringify(payload));
 const signature = sign(null, Buffer.concat([Buffer.from('SoundSense/update-manifest/v1\n'), bytes]), key).toString('hex');
 writeFileSync(output, JSON.stringify({ schema: 1, payload: bytes.toString('base64'), signature }, null, 2) + '\n');

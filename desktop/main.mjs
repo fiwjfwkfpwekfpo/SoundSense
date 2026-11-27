@@ -68,7 +68,8 @@ protocol.registerSchemesAsPrivileged([
 const state = createStateStore(paths), secrets = createSecrets(paths), http = createHttp();
 let window;
 const files = createFiles(paths, () => window);
-const updater = createUpdater({ cache: paths.cache, appImage: process.platform === 'linux' ? process.env.APPIMAGE : undefined, fetch: (url, options) => net.fetch(url, options), onProgress: value => window?.webContents.send('updates:progress', value), quit: () => app.quit() });
+// Windows: only the installed build updates itself; the portable one (electron-builder sets PORTABLE_EXECUTABLE_FILE) does not.
+const updater = createUpdater({ cache: paths.cache, appImage: process.platform === 'linux' ? process.env.APPIMAGE : undefined, windowsInstall: process.platform === 'win32' && app.isPackaged && !process.env.PORTABLE_EXECUTABLE_FILE, fetch: (url, options) => net.fetch(url, options), onProgress: value => window?.webContents.send('updates:progress', value), quit: () => app.quit() });
 // Listened and downloaded tracks: <cache>/tracks (desktop/music-cache.mjs).
 const music = createMusicCache({ directory: join(paths.cache, 'tracks'), fetch: (url, options) => net.fetch(url, options), onChange: value => window?.webContents.send('cache:change', value) });
 const waves = createWaveforms(paths, value => window?.webContents.send('waves:progress', value), music);

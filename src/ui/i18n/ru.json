@@ -752,5 +752,7 @@
   "lyricsSources.up": "Поднять {name}",
   "lyricsSources.down": "Опустить {name}",
   "setting.liveCoversYandex": "Видео из Яндекс Музыки",
-  "setting.liveCoversYandexHint": "Живая обложка трека из Яндекс Музыки. Нужен вход в Яндекс, без него берётся Apple Music."
+  "setting.liveCoversYandexHint": "Живая обложка трека из Яндекс Музыки. Нужен вход в Яндекс, без него берётся Apple Music.",
+  "update.manualHint": "Эта версия не обновляется сама. Скачай новую со страницы релизов.",
+  "update.openReleases": "Открыть страницу релизов"
 }

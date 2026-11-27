@@ -3,22 +3,29 @@ import { spawn } from 'node:child_process';
 import { chmod, copyFile, mkdir, open, readdir, rename, rm, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 /*
- * Self-update of the AppImage. The window has already verified the signed manifest (Ed25519);
+ * Self-update of the desktop app: the Linux AppImage replaces itself; the installed Windows
+ * app runs the new signed-manifest installer silently (the portable build cannot update itself).
+ *
+ * AppImage. The window has already verified the signed manifest (Ed25519);
  * this process downloads the file named in it, checks size and SHA-256, and replaces the running
  * AppImage:
  *   1. download to <cache>/updates/<name>.part, hash while writing, rename to <name> when it matches
  *   2. copy next to the installed AppImage, mark executable, rename over it (atomic; the running
  *      instance keeps working from the old inode)
  *   3. start the new file once this process has exited, then quit
+ * Windows (NSIS, per-user install): the setup .exe is downloaded and checked the same way, then
+ * started detached with `--updated /S --force-run` (silent, into the existing install folder,
+ * reopening the app) and this process quits.
  * Nothing is installed unless the size and the hash match the manifest.
  */
-const MAX_SIZE = 512 * 1024 * 1024, NAME = /^[a-z\d][a-z\d._-]{0,180}\.AppImage$/i, HEX = /^[a-f\d]{64}$/i;
+const MAX_SIZE = 512 * 1024 * 1024, HEX = /^[a-f\d]{64}$/i;
+const NAMES = { appimage: /^[a-z\d][a-z\d._-]{0,180}\.AppImage$/i, windows: /^[a-z\d][a-z\d._-]{0,180}\.exe$/i };
 const PROGRESS_EVERY = 250;
 
-export function validateArtifact(artifact) {
+export function validateArtifact(artifact, kind = 'appimage') {
   if (!artifact || typeof artifact !== 'object') throw new Error('Invalid update');
   const { filename, size, sha256, urls } = artifact;
-  if (typeof filename !== 'string' || !NAME.test(filename)) throw new Error('Invalid update file name');
+  if (typeof filename !== 'string' || !NAMES[kind]?.test(filename)) throw new Error('Invalid update file name');
   if (!Number.isSafeInteger(size) || size <= 0 || size > MAX_SIZE) throw new Error('Invalid update size');
   if (typeof sha256 !== 'string' || !HEX.test(sha256)) throw new Error('Invalid update hash');
   if (!Array.isArray(urls) || !urls.length || urls.length > 12) throw new Error('Invalid update addresses');
@@ -32,6 +39,15 @@ export async function looksLikeAppImage(path) {
   try { const { buffer } = await handle.read(Buffer.alloc(11), 0, 11, 0); return buffer.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46])) && buffer[8] === 0x41 && buffer[9] === 0x49 && buffer[10] === 0x02; }
   finally { await handle.close(); }
 }
+/** A Windows executable starts with the "MZ" DOS header and points to a "PE\0\0" header. */
+export async function looksLikeWindowsExe(path) {
+  const handle = await open(path, 'r');
+  try {
+    const { buffer } = await handle.read(Buffer.alloc(64), 0, 64, 0); if (buffer[0] !== 0x4d || buffer[1] !== 0x5a) return false;
+    const offset = buffer.readUInt32LE(60); if (offset < 64 || offset > 4096) return false;
+    const { buffer: pe } = await handle.read(Buffer.alloc(4), 0, 4, offset); return pe.equals(Buffer.from([0x50, 0x45, 0, 0]));
+  } finally { await handle.close(); }
+}
 /** Environment for the new instance: the old AppImage mount must not leak into it. */
 export function cleanEnv(env) {
   const out = { ...env }, mount = env.APPDIR;
@@ -44,12 +60,14 @@ export function cleanEnv(env) {
 }
 
 /**
- * @param {{ cache: string, appImage?: string, fetch: typeof fetch, onProgress?: (value: { id: string, bytes: number }) => void,
+ * `windowsInstall`: running from an installed (not portable) Windows build.
+ * @param {{ cache: string, appImage?: string, windowsInstall?: boolean, fetch: typeof fetch, onProgress?: (value: { id: string, bytes: number }) => void,
  *           quit?: () => void, spawnFile?: typeof spawn, pid?: number, env?: Record<string, string | undefined> }} options
  */
-export function createUpdater({ cache, appImage, fetch: doFetch, onProgress = () => {}, quit = () => {}, spawnFile = spawn, pid = process.pid, env = process.env }) {
+export function createUpdater({ cache, appImage, windowsInstall = false, fetch: doFetch, onProgress = () => {}, quit = () => {}, spawnFile = spawn, pid = process.pid, env = process.env }) {
   const folder = join(cache, 'updates'), jobs = new Map(), ready = new Map();
-  const available = () => !!appImage;
+  const kind = appImage ? 'appimage' : windowsInstall ? 'windows' : undefined;
+  const available = () => !!kind;
   async function cleanup(keep) {
     let names = []; try { names = await readdir(folder); } catch { return; }
     for (const name of names) if (name !== keep) await rm(join(folder, name), { force: true }).catch(() => {});
@@ -76,8 +94,8 @@ export function createUpdater({ cache, appImage, fetch: doFetch, onProgress = ()
     available,
     /** Resolves with the token for install(). */
     async download(id, artifactInput) {
-      const artifact = validateArtifact(artifactInput);
-      if (!available()) throw new Error('Not running from an AppImage');
+      if (!available()) throw new Error('This build cannot update itself');
+      const artifact = validateArtifact(artifactInput, kind);
       jobs.get(id)?.abort(); const controller = new AbortController(); jobs.set(id, controller);
       await mkdir(folder, { recursive: true, mode: 0o700 });
       await cleanup(); const part = join(folder, `${artifact.filename}.part`), file = join(folder, artifact.filename);
@@ -93,10 +111,18 @@ export function createUpdater({ cache, appImage, fetch: doFetch, onProgress = ()
       } finally { jobs.delete(id); await rm(part, { force: true }).catch(() => {}); }
     },
     cancel(id) { jobs.get(id)?.abort(new Error('Aborted')); },
-    /** Replaces the AppImage and starts the new one when this process is gone. */
+    /** Replaces the AppImage (or runs the Windows installer) and starts the new version when this process is gone. */
     async install(token) {
       const entry = ready.get(token); if (!entry) throw new Error('Nothing downloaded');
-      if (!available()) throw new Error('Not running from an AppImage');
+      if (!available()) throw new Error('This build cannot update itself');
+      if (kind === 'windows') {
+        const info = await stat(entry.file); if (info.size !== entry.artifact.size || !await looksLikeWindowsExe(entry.file)) throw new Error('Downloaded file is not a Windows installer');
+        ready.delete(token);
+        // The installer closes what is left of this app, installs over it and starts it again.
+        const child = spawnFile(entry.file, ['--updated', '/S', '--force-run'], { detached: true, stdio: 'ignore', windowsHide: true });
+        child.unref?.(); quit();
+        return 'opened';
+      }
       const info = await stat(entry.file); if (info.size !== entry.artifact.size || !await looksLikeAppImage(entry.file)) throw new Error('Downloaded file is not an AppImage');
       const next = `${appImage}.update`;
       try { await copyFile(entry.file, next); await chmod(next, 0o755); await rename(next, appImage); }

@@ -83,7 +83,7 @@ All builds are on the [**Releases**](../../releases/latest) page. APKs are also 
 |---|---|---|
 | **Android** | `SoundSense-<version>-<channel>.apk` | updates itself |
 | **Linux** | `SoundSense-<version>-<channel>-x86_64.AppImage` | updates itself |
-| **Windows** | `…-windows-x64-setup.exe` | installer |
+| **Windows** | `…-windows-x64-setup.exe` | installer, updates itself |
 | | `…-windows-x64-portable.exe` | no install |
 
 | Channel | For whom |
@@ -112,7 +112,7 @@ Settings live in `%APPDATA%\SoundSense\`, data and cache in `%LOCALAPPDATA%\Soun
 
 ### Updates
 
-The app watches the `releases` branch. If it holds a version newer than the installed one, the app offers to download it. Before installing, it checks the Ed25519 signature, SHA-256, size, package ID and certificate; it will not accept an older version. Checks run on their own, at launch and on a timer. Windows has no auto-update yet: download new versions from [Releases](../../releases/latest).
+The app watches the `releases` branch. If it holds a version newer than the installed one, the app offers to download it. Before installing, it checks the Ed25519 signature, SHA-256, size, package ID and certificate; it will not accept an older version. Checks run on their own, at launch and on a timer. On Windows the installed version updates itself (it runs the new installer silently and restarts); download the portable build from [Releases](../../releases/latest).
 
 ## Plugins
 

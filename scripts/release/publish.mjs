@@ -97,7 +97,7 @@ if (withWindows) {
 
 step('Sign manifest');
 const signed = join(BUILDS, `${channel.name}-${version}.json`);
-run('node', ['scripts/release/sign-manifest.mjs', apk, signed, version, String(versionCode), ORIGIN], { env: { SS_CHANNEL: channel.name, SS_EXTRA_URLS: apkUrl, ...(withDesktop ? { SS_LINUX_APPIMAGE: appImage, SS_LINUX_URL: appImageUrl } : {}) } });
+run('node', ['scripts/release/sign-manifest.mjs', apk, signed, version, String(versionCode), ORIGIN], { env: { SS_CHANNEL: channel.name, SS_EXTRA_URLS: apkUrl, ...(withDesktop ? { SS_LINUX_APPIMAGE: appImage, SS_LINUX_URL: appImageUrl } : {}), ...(withWindows ? { SS_WINDOWS_SETUP: windowsFiles[0], SS_WINDOWS_URL: `https://github.com/${REPO}/releases/download/v${version}/${encodeURIComponent(basename(windowsFiles[0]))}` } : {}) } });
 
 /** GitHub REST call through curl (the proxy from .release/config.json, the token from .release/github-token). */
 function github(method, url, { json, file } = {}) {
@@ -122,7 +122,7 @@ function uploadAssets(files) {
     const list = (title, lines) => [`**${title}**`, ...lines.map(line => `- ${line}`), ''];
     const beta = channel.name === 'beta';
     const body = [
-      '> [!NOTE]', `> ${beta ? 'Бета-версия. ' : ''}Приложение на Android и Linux обновится само${withWindows ? ', на Windows скачай новую версию отсюда' : ''}.`, `> ${beta ? 'Beta build. ' : ''}Android and Linux update themselves${withWindows ? '; on Windows, download new versions here' : ''}.`, '',
+      '> [!NOTE]', `> ${beta ? 'Бета-версия. ' : ''}Приложение обновится само${withWindows ? ' (кроме portable-версии для Windows: её скачивай отсюда)' : ''}.`, `> ${beta ? 'Beta build. ' : ''}The app updates itself${withWindows ? ' (except the Windows portable build: download it here)' : ''}.`, '',
       '## Скачать · Download', '', '| Платформа · Platform | Файл · File |', '|---|---|', ...rows.map(([name, file]) => `| ${name} | ${link(file)} |`), '',
       ...(withWindows ? ['Windows: файлы пока без подписи, SmartScreen может предупредить — **Подробнее → Выполнить в любом случае**.', 'Windows: the files are not signed yet; if SmartScreen warns, choose **More info → Run anyway**.', ''] : []),
       '## Что нового', '', ...(withDesktop ? list('ПК', notes.desktop.ru) : []), ...list('Android', notes.android.ru),
