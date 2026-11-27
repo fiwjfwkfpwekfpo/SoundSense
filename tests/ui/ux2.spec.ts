@@ -21,13 +21,30 @@ test('capture new color palettes on home and player', async ({ page }) => {
 });
 test('crossfade changes artwork, title and waveform during the overlap', async ({ page }) => {
   await ready(page); await openPlayer(page); const player = page.getByTestId('player'), slider = player.getByRole('slider');
+  // The artwork and wave use their own preset durations. Observe their start before
+  // pressing play so a fast transition cannot finish between Playwright assertions.
+  await player.evaluate(node => {
+    const observer = new MutationObserver(() => {
+      for (const [selector, attribute, flag] of [
+        ['[data-testid="track-artwork"]', 'data-transition-progress', 'data-qa-art-started'],
+        ['[data-testid="waveform"]', 'data-morph-progress', 'data-qa-wave-started'],
+      ] as const) {
+        const value = node.querySelector(selector)?.getAttribute(attribute);
+        if (value != null && Number(value) < .4 && node.hasAttribute('data-crossfade')) node.setAttribute(flag, 'true');
+      }
+      if (node.hasAttribute('data-qa-art-started') && node.hasAttribute('data-qa-wave-started')) observer.disconnect();
+    });
+    observer.observe(node, { subtree: true, attributes: true, attributeFilter: ['data-crossfade', 'data-transition-progress', 'data-morph-progress'] });
+  });
   await slider.focus(); await page.keyboard.press('End'); await page.keyboard.press('ArrowLeft'); await player.getByRole('button', { name: 'Воспроизвести', exact: true }).click();
   await expect(player).toHaveAttribute('data-crossfade', /0\./);
   await expect(player.getByRole('heading', { name: 'Как ты там?', exact: true })).toBeVisible();
-  expect(Number(await page.getByTestId('track-artwork').getAttribute('data-transition-progress'))).toBeLessThan(.4);
-  expect(Number(await page.getByTestId('waveform').getAttribute('data-morph-progress'))).toBeLessThan(.4);
+  await expect(player).toHaveAttribute('data-qa-art-started', 'true');
+  await expect(player).toHaveAttribute('data-qa-wave-started', 'true');
   await page.screenshot({ path: 'docs/screens/ux2/crossfade-start.png' });
   await expect.poll(async () => Number(await player.getAttribute('data-crossfade'))).toBeGreaterThan(.45);
+  await expect(page.getByTestId('track-artwork')).toHaveAttribute('data-transition-progress', '1.000');
+  await expect(page.getByTestId('waveform')).toHaveAttribute('data-morph-progress', '1.000');
   await page.screenshot({ path: 'docs/screens/ux2/crossfade-middle.png' });
   await expect(player).not.toHaveAttribute('data-crossfade', /./);
   await expect(page.getByTestId('waveform')).toHaveAttribute('data-morph-progress', '1.000'); await page.screenshot({ path: 'docs/screens/ux2/crossfade-end.png' });
