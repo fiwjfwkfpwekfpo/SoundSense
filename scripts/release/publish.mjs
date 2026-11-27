@@ -117,9 +117,18 @@ function uploadAssets(files) {
   const base = `https://api.github.com/repos/${REPO}`, tag = `v${version}`;
   let release = github('GET', `${base}/releases/tags/${tag}`);
   if (release.status === 404) {
-    const section = (title, list) => [`### ${title}`, '', ...list.ru.map(line => `- ${line}`), '', ...list.en.map(line => `- ${line}`), ''];
-    const body = ['## SoundSense ' + version, '', ...(withDesktop ? section('Desktop', notes.desktop) : []), ...section('Android', notes.android), withWindows ? 'Linux builds are downloaded by the in-app updater; Windows builds are the .exe files below (installer or portable); the Android packages are in the `releases` branch.' : 'Desktop builds are downloaded by the in-app updater; the Android packages are in the `releases` branch.'].join('\n');
-    release = github('POST', `${base}/releases`, { json: { tag_name: tag, target_commitish: run('git', ['rev-parse', 'HEAD'], { capture: true }).trim(), name: `SoundSense ${version}`, body, draft: false, prerelease: false } });
+    const link = file => `[\`${basename(file)}\`](https://github.com/${REPO}/releases/download/${tag}/${encodeURIComponent(basename(file))})`;
+    const rows = [['**Android**', apk], ...(withWindows ? [['**Windows x64** — установщик · installer', windowsFiles[0]], ['**Windows x64** — без установки · portable', windowsFiles[1]]] : []), ...(withDesktop ? [['**Linux x64**', appImage]] : [])];
+    const list = (title, lines) => [`**${title}**`, ...lines.map(line => `- ${line}`), ''];
+    const beta = channel.name === 'beta';
+    const body = [
+      '> [!NOTE]', `> ${beta ? 'Бета-версия. ' : ''}Приложение на Android и Linux обновится само${withWindows ? ', на Windows скачай новую версию отсюда' : ''}.`, `> ${beta ? 'Beta build. ' : ''}Android and Linux update themselves${withWindows ? '; on Windows, download new versions here' : ''}.`, '',
+      '## Скачать · Download', '', '| Платформа · Platform | Файл · File |', '|---|---|', ...rows.map(([name, file]) => `| ${name} | ${link(file)} |`), '',
+      ...(withWindows ? ['Windows: файлы пока без подписи, SmartScreen может предупредить — **Подробнее → Выполнить в любом случае**.', 'Windows: the files are not signed yet; if SmartScreen warns, choose **More info → Run anyway**.', ''] : []),
+      '## Что нового', '', ...(withDesktop ? list('ПК', notes.desktop.ru) : []), ...list('Android', notes.android.ru),
+      "## What's new", '', ...(withDesktop ? list('Desktop', notes.desktop.en) : []), ...list('Android', notes.android.en),
+    ].join('\n');
+    release = github('POST', `${base}/releases`, { json: { tag_name: tag, target_commitish: run('git', ['rev-parse', 'HEAD'], { capture: true }).trim(), name: `SoundSense ${version}${channel.name === 'beta' ? ' · бета' : ''}`, body, draft: false, prerelease: false } });
   }
   if (![200, 201].includes(release.status) || !release.body?.id) fail(`GitHub release ${tag}: HTTP ${release.status} ${release.body?.message ?? ''} (is the commit pushed?)`);
   for (const file of files) uploadAsset(release.body, file, tag);
