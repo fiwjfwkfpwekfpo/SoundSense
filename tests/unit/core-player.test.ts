@@ -37,9 +37,9 @@ describe('core player', () => {
     expect(player.getSnapshot().trackId).toBe('a'); expect(Math.min(volume.a, volume.b)).toBeCloseTo(10 ** (-8 / 20), 3);
     player.dispose();
   });
-  it('applies a level that arrives right at the start', async () => {
+  it('keeps the initial gain when the measurement arrives just after playback starts', async () => {
     const { player, volume, levels } = setup();
-    player.play(['a']); await flush(); levels.get('a')!(-8); await flush(); expect(volume.b).toBeCloseTo(10 ** (-6 / 20), 3); player.dispose();
+    player.play(['a']); await flush(); levels.get('a')!(-8); await flush(); expect(volume.b).toBe(1); player.dispose();
   });
   it('moves on by the engine\'s "ended" event without waiting for a timer', async () => {
     const { player, emit, clocks } = setup();

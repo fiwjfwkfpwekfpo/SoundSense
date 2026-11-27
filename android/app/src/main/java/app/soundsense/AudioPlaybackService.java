@@ -62,7 +62,7 @@ public class AudioPlaybackService extends Service {
     private final Slot a = new Slot("a"), b = new Slot("b");
     private Slot current = a, fadingFrom, fadingTo;
     private long envelopeStart, envelopeDuration;
-    private float envelopeGain = 1, duck = 1;
+    private float envelopeStartGain = 1, duck = 1;
     private boolean foreground = false, resumeAfterFocus = false;
     private long lastNotification = 0;
     private long lastReport = 0;
@@ -78,13 +78,16 @@ public class AudioPlaybackService extends Service {
     private double armAt = -1, armUntil = Double.MAX_VALUE, armDuration = 0, armPosition = 0;
     private class Slot {
         boolean loop;
-        final String id; MediaPlayer player; ExoPlayer stream; boolean ready, playing, ended, buffering; float gain = 1;
+        final String id; MediaPlayer player; ExoPlayer stream; boolean ready, playing, ended, buffering; float gain = 1, fade = 1;
         String title = "", artist = "", trackId = "", artworkUri = ""; PluginCall pending;
         Bitmap artwork; int artworkGeneration; boolean liked, hasPrevious, hasNext;
         String failureReason, failureMessage, sourceUri = ""; boolean offline;
         Integer failureStatus; int requests;
         org.json.JSONObject sourceHeaders = new org.json.JSONObject();
         long bufferingAt;
+        String backendTrack = "", processingTrack = "";
+        float nextRate = 1, nextPitch = 1, nextBoost = 1;
+        int boostSession; float appliedBoost = 1;
         float rate = 1, pitch = 1, boost = 1; android.media.audiofx.LoudnessEnhancer loudness;
         Slot(String id) { this.id = id; }
     }
@@ -95,7 +98,7 @@ public class AudioPlaybackService extends Service {
         JSObject value = new JSObject(); value.put("entries", PlaybackDiagnostics.snapshot());
         PowerManager power = (PowerManager)getSystemService(POWER_SERVICE);
         value.put("screenOn", power.isInteractive()); value.put("powerSave", power.isPowerSaveMode()); value.put("unrestricted", power.isIgnoringBatteryOptimizations(getPackageName()));
-        JSObject slots = new JSObject(); for (Slot target : new Slot[] {a, b}) { JSObject item = new JSObject(); item.put("trackId", target.trackId); item.put("ready", target.ready); item.put("playing", target.playing); item.put("buffering", target.buffering); item.put("offline", target.offline); item.put("position", position(target)); item.put("rate", target.rate); item.put("pitch", target.pitch); item.put("volume", target.boost); item.put("artwork", target.artwork != null); item.put("backend", target.stream != null ? "Media3" : "MediaPlayer"); if (target.stream != null) { item.put("appliedRate", target.stream.getPlaybackParameters().speed); item.put("appliedPitch", target.stream.getPlaybackParameters().pitch); } slots.put(target.id, item); }
+        JSObject slots = new JSObject(); for (Slot target : new Slot[] {a, b}) { JSObject item = new JSObject(); item.put("trackId", target.trackId); item.put("ready", target.ready); item.put("playing", target.playing); item.put("buffering", target.buffering); item.put("offline", target.offline); item.put("position", position(target)); item.put("rate", target.rate); item.put("pitch", target.pitch); item.put("volume", target.boost); gainDetails(target, item); item.put("artwork", target.artwork != null); item.put("backend", target.stream != null ? "Media3" : "MediaPlayer"); if (target.stream != null) { item.put("appliedRate", target.stream.getPlaybackParameters().speed); item.put("appliedPitch", target.stream.getPlaybackParameters().pitch); } slots.put(target.id, item); }
         value.put("slots", slots); value.put("current", current.id); call.resolve(value);
     }); }
     private void action(String type, Slot slot) {
@@ -104,11 +107,12 @@ public class AudioPlaybackService extends Service {
         PlaybackDiagnostics.record("control." + type, slot == null ? "" : slot.trackId, slot == null ? null : slot.failureMessage, slot == null ? null : slot.failureReason, null);
         emit("action", value);
     }
-    private final AudioManager.OnAudioFocusChangeListener focusListener = change -> audio.post(() -> {
+    private final AudioManager.OnAudioFocusChangeListener focusListener = this::audioFocusChanged;
+    void audioFocusChanged(int change) { audio.post(() -> {
         if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) { duck = .2f; volume(a); volume(b); }
         else if (change == AudioManager.AUDIOFOCUS_GAIN) { duck = 1; volume(a); volume(b); if (resumeAfterFocus) { resumeAfterFocus = false; action("play", current); start(current, position(current)); } }
-        else if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) { resumeAfterFocus = change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT && current.playing; pauseAll(); action("pause", current); }
-    });
+        else if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) { resumeAfterFocus = change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT && current.playing; pauseAll(); duck = 1; action("pause", current); }
+    }); }
     private final BroadcastReceiver noisy = new BroadcastReceiver() { @Override public void onReceive(Context context, Intent intent) { audio.post(() -> { pauseAll(); action("pause", current); }); } };
 
     @Override public void onCreate() {
@@ -129,7 +133,7 @@ public class AudioPlaybackService extends Service {
             @Override public void onSkipToNext() { audio.post(() -> skipNext()); }
             @Override public void onSkipToPrevious() { action("previous", current); }
             @Override public void onSeekTo(long position) { audio.post(() -> {
-                seek(current, position / 1000.0); updateNotification();
+                interruptEnvelope(current); seek(current, position / 1000.0); updateNotification();
                 JSObject value = new JSObject(); value.put("type", "seek"); value.put("slot", current.id); value.put("position", position / 1000.0); emit("action", value);
             }); }
             @Override public void onCustomAction(String command, android.os.Bundle extras) { if ("soundsense.like".equals(command)) audio.post(() -> { current.liked = !current.liked; action("like", current); updateNotification(); }); }
@@ -164,7 +168,13 @@ public class AudioPlaybackService extends Service {
         long fading = target == fadingFrom ? envelopeStart + envelopeDuration - SystemClock.elapsedRealtime() : 0;
         if (fading > 0) { audio.postDelayed(() -> prepareNow(target, request, uri, trackId, title, artist, headers, call), fading + 30); return; }
         {
-            release(target); target.title = title; target.artist = artist; target.trackId = trackId; target.pending = call; target.buffering = true; target.bufferingAt = SystemClock.elapsedRealtime(); target.sourceHeaders = headers;
+            release(target);
+            target.backendTrack = trackId;
+            boolean requested = target.processingTrack.equals(trackId);
+            target.rate = requested ? target.nextRate : 1;
+            target.pitch = requested ? target.nextPitch : 1;
+            target.boost = requested ? target.nextBoost : 1;
+            target.title = title; target.artist = artist; target.trackId = trackId; target.pending = call; target.buffering = true; target.bufferingAt = SystemClock.elapsedRealtime(); target.sourceHeaders = headers;
             PlaybackDiagnostics.record("prepare.start", trackId, null, null, null);
             try {
                 Uri source = Uri.parse(uri); String scheme = source.getScheme();
@@ -181,7 +191,7 @@ public class AudioPlaybackService extends Service {
                 player.setOnErrorListener((failed, what, extra) -> {
                     if (target.player != failed) return true; target.playing = false; target.buffering = false;
                     if (target.pending != null) { target.pending.reject("Audio decoder error " + what + "/" + extra); target.pending = null; }
-                    target.failureReason = "decoder"; target.failureMessage = "MediaPlayer:" + what + "/" + extra; target.ready = false; if (target == armedTo) disarm("failed"); action("error", target); report(target); return true;
+                    target.failureReason = "decoder"; target.failureMessage = "MediaPlayer:" + what + "/" + extra; target.ready = false; if (inEnvelope(target)) interruptEnvelope(null); if (target == armedTo) disarm("failed"); action("error", target); report(target); return true;
                 });
                 player.setOnInfoListener((p, what, extra) -> { if (what == MediaPlayer.MEDIA_INFO_BUFFERING_START) target.buffering = true; else if (what == MediaPlayer.MEDIA_INFO_BUFFERING_END) target.buffering = false; return false; });
                 player.setOnCompletionListener(complete -> { if (target.player == complete) { target.playing = false; target.ended = true; report(target); endedHandOff(target); } });
@@ -276,7 +286,7 @@ public class AudioPlaybackService extends Service {
                 }
                 PlaybackDiagnostics.record("stream.failed", target.trackId, error.getErrorCodeName(), target.failureReason, status);
                 // A failed player cannot be started: a hand-off must not switch to it.
-                target.ready = false; if (target == armedTo) disarm("failed");
+                target.ready = false; if (inEnvelope(target)) interruptEnvelope(null); if (target == armedTo) disarm("failed");
                 if (target.pending != null) { target.pending.reject("Stream error " + error.getErrorCodeName(), status == null ? error.getErrorCodeName() : "HTTP_" + status); target.pending = null; }
                 action("error", target); report(target);
             }
@@ -293,7 +303,7 @@ public class AudioPlaybackService extends Service {
         audio.post(() -> {
             Slot target = slot(options.optString("slot", "a")); String command = options.optString("action");
             try {
-                if ("start".equals(command)) { if (target == armedTo) disarm("start"); start(target, options.optDouble("position", 0)); }
+                if ("start".equals(command)) { if (target == armedTo) disarm("start"); if (inEnvelope(target)) interruptEnvelope(target); start(target, options.optDouble("position", 0)); }
                 else if ("arm".equals(command)) arm(target, options);
                 else if ("disarm".equals(command)) disarm("js");
                 else if ("reporting".equals(command)) { reportEvery = Math.max(100, Math.min(5000, options.optLong("ms", 250))); lastReport = 0; }
@@ -301,19 +311,33 @@ public class AudioPlaybackService extends Service {
                     org.json.JSONObject metadata = options.optJSONObject("metadata");
                     if (metadata != null) { boolean prepared = target.ready && target.trackId.equals(metadata.optString("trackId")); target.trackId = metadata.optString("trackId"); target.title = metadata.optString("title"); target.artist = metadata.optString("artist"); target.buffering = !prepared; target.failureReason = null; target.failureStatus = null; current = target; applyMetadata(metadata); updateMetadata(); updateNotification(); }
                 }
-                else if ("failure".equals(command)) { target.failureReason = options.optString("reason", "unavailable"); target.failureMessage = options.optString("message", "Playback unavailable"); target.buffering = false; target.playing = false; current = target; updateNotification(); }
-                else if ("pause".equals(command)) { pause(target); updateNotification(); }
+                else if ("failure".equals(command)) { if (inEnvelope(target)) interruptEnvelope(null); target.failureReason = options.optString("reason", "unavailable"); target.failureMessage = options.optString("message", "Playback unavailable"); target.buffering = false; target.playing = false; current = target; updateNotification(); }
+                else if ("pause".equals(command)) { if (inEnvelope(target)) interruptEnvelope(null); pause(target); updateNotification(); }
                 else if ("stop".equals(command)) { target.requests++; release(target); }
-                else if ("seek".equals(command)) seek(target, options.optDouble("position", 0));
+                else if ("seek".equals(command)) { if (inEnvelope(target) || target == current) interruptEnvelope(target); seek(target, options.optDouble("position", 0)); }
                 // Repeat-one loops natively: with the screen off the WebView may be frozen when the track ends.
                 else if ("loop".equals(command)) { target.loop = options.optBoolean("loop", false); applyLoop(target); }
-                else if ("gain".equals(command)) { target.gain = (float)Math.max(0, Math.min(1, options.optDouble("gain", 1))); if (target != fadingFrom && target != fadingTo) volume(target); }
-                else if ("processing".equals(command)) { org.json.JSONObject value = options.optJSONObject("processing"); if (value != null) { target.rate = (float)Math.max(.25, Math.min(4, value.optDouble("rate", 1))); target.pitch = (float)Math.max(.25, Math.min(4, value.optDouble("pitch", 1))); target.boost = (float)Math.max(0, Math.min(2, value.optDouble("volume", 1))); applyProcessing(target); volume(target); } }
+                else if ("gain".equals(command)) { target.gain = (float)Math.max(0, Math.min(1, options.optDouble("gain", 1))); volume(target); }
+                else if ("processing".equals(command)) {
+                    org.json.JSONObject value = options.optJSONObject("processing");
+                    if (value != null) {
+                        target.processingTrack = options.optString("trackId", target.trackId);
+                        target.nextRate = (float)Math.max(.25, Math.min(4, value.optDouble("rate", 1)));
+                        target.nextPitch = (float)Math.max(.25, Math.min(4, value.optDouble("pitch", 1)));
+                        target.nextBoost = (float)Math.max(0, Math.min(2, value.optDouble("volume", 1)));
+                        // Preloading reuses the outgoing slot after the envelope has finished.
+                        if (target.backendTrack.equals(target.processingTrack)) {
+                            target.rate = target.nextRate; target.pitch = target.nextPitch; target.boost = target.nextBoost;
+                            applyProcessing(target); volume(target);
+                        }
+                    }
+                }
                 else if ("metadata".equals(command)) applyMetadata(options.optJSONObject("metadata"));
-                else if ("fadeOut".equals(command)) { disarm("fadeOut"); fadingFrom = target; fadingTo = null; envelopeGain = target.gain; envelopeStart = SystemClock.elapsedRealtime(); envelopeDuration = Math.max(1, (long)(options.optDouble("seconds", .18) * 1000)); }
+                else if ("fadeOut".equals(command)) { disarm("fadeOut"); envelope(target, null, options.optDouble("seconds", .18)); }
                 else if ("crossfade".equals(command)) {
-                    disarm("crossfade"); Slot to = slot(options.optString("to")); to.gain = 0; start(to, options.optDouble("position", 0));
-                    fadingFrom = target; fadingTo = to; envelopeGain = target.gain; envelopeStart = SystemClock.elapsedRealtime(); envelopeDuration = Math.max(1, (long)(options.optDouble("seconds", 3) * 1000));
+                    disarm("crossfade"); Slot to = slot(options.optString("to"));
+                    envelope(target, to, options.optDouble("seconds", 3));
+                    if (!start(to, options.optDouble("position", 0))) interruptEnvelope(target);
                 }
                 else if ("dispose".equals(command)) { release(a); release(b); stopForeground(true); foreground = false; stopSelf(); }
             } catch (Exception error) { action("error", target); }
@@ -336,23 +360,59 @@ public class AudioPlaybackService extends Service {
     }
     private double position(Slot target) { try { return target.stream != null ? target.stream.getCurrentPosition() / 1000.0 : target.ready && target.player != null ? target.player.getCurrentPosition() / 1000.0 : 0; } catch (Exception error) { return 0; } }
     private long duration(Slot target) { try { return target.stream != null ? Math.max(0, target.stream.getDuration()) : target.ready && target.player != null ? target.player.getDuration() : 0; } catch (Exception error) { return 0; } }
-    private void start(Slot target, double position) {
+    private boolean start(Slot target, double position) {
         if (!target.ready || target.player == null && target.stream == null) {
             // The WebView believes this slot is prepared (it failed meanwhile): tell it, so it resolves the track again.
             if (!target.trackId.isEmpty()) { target.failureReason = "network"; target.failureMessage = "slot-not-ready"; target.failureStatus = null; action("error", target); }
-            return;
+            return false;
         }
         int granted = Build.VERSION.SDK_INT >= 26 ? manager.requestAudioFocus(focus) : manager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
-        if (granted != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) { action("pause", target); return; }
+        if (granted != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) { action("pause", target); return false; }
         current = target; seek(target, position); volume(target); if (target.stream != null) target.stream.play(); else target.player.start(); target.playing = true; target.ended = false;
         ContextCompat.startForegroundService(this, new Intent(this, AudioPlaybackService.class)); updateMetadata(); report(target); updateNotification();
+        recordGain("gain.start", target);
         String id = target.trackId, uri = target.sourceUri;
         if (!target.offline && uri.startsWith("https://")) audio.postDelayed(() -> { if (target.playing && target.trackId.equals(id) && target.sourceUri.equals(uri)) MusicCache.get(this).listened(id, uri); }, 3000);
+        return true;
     }
     private void seek(Slot target, double position) { if (target.ready) { long length = duration(target), milliseconds = Math.max(0, length > 0 ? Math.min(length, (long)(position * 1000)) : (long)(position * 1000)); target.buffering = true; if (target.stream != null) { target.stream.seekTo(milliseconds); target.buffering = target.stream.getPlaybackState() == Player.STATE_BUFFERING; } else if (target.player != null) { if (Build.VERSION.SDK_INT >= 26) target.player.seekTo(milliseconds, MediaPlayer.SEEK_CLOSEST); else target.player.seekTo((int)milliseconds); } target.ended = false; report(target); } }
     private void pause(Slot target) { if (target.stream != null) target.stream.pause(); else if (target.player != null && target.ready && target.playing) target.player.pause(); target.playing = false; report(target); }
-    private void pauseAll() { fadingFrom = null; fadingTo = null; pause(a); pause(b); updateNotification(); }
-    private void volume(Slot target) { float gain = target.gain * duck * Math.min(1, target.boost); if (target.stream != null) target.stream.setVolume(gain); else if (target.player != null && target.ready) target.player.setVolume(gain, gain); }
+    private void pauseAll() { interruptEnvelope(null); pause(a); pause(b); updateNotification(); }
+    private boolean inEnvelope(Slot target) { return target == fadingFrom || target == fadingTo; }
+    private void envelope(Slot from, Slot to, double seconds) {
+        float start = from.fade;
+        interruptEnvelope(from);
+        fadingFrom = from; fadingTo = to; envelopeStartGain = start;
+        from.fade = start; volume(from);
+        if (to != null) { to.gain = 1; to.fade = 0; volume(to); }
+        envelopeStart = SystemClock.elapsedRealtime();
+        envelopeDuration = Math.max(1, (long)(seconds * 1000));
+        audio.removeCallbacks(pulse); audio.post(pulse);
+    }
+    private void interruptEnvelope(Slot keepPlaying) {
+        Slot from = fadingFrom, to = fadingTo;
+        if (from == null) return;
+        fadingFrom = null; fadingTo = null;
+        if (from != keepPlaying) pause(from);
+        from.fade = 1; volume(from);
+        if (to != null) { to.fade = 1; volume(to); recordGain("gain.settled", to); }
+    }
+    private float playerGain(Slot target) { return target.gain * target.fade * duck * Math.min(1, target.boost); }
+    private void volume(Slot target) {
+        float gain = playerGain(target);
+        if (target.stream != null) target.stream.setVolume(gain);
+        else if (target.player != null && target.ready) target.player.setVolume(gain, gain);
+    }
+    private void gainDetails(Slot target, JSObject data) {
+        data.put("slot", target.id); data.put("gain", target.gain); data.put("envelope", target.fade); data.put("duck", duck);
+        data.put("boost", target.boost); data.put("playerGain", playerGain(target)); data.put("enhancerGain", target.appliedBoost);
+        data.put("effectiveGain", playerGain(target) * target.appliedBoost);
+    }
+    private void recordGain(String event, Slot target) {
+        if (!ReleaseChannel.debug) return;
+        JSObject data = new JSObject(); gainDetails(target, data);
+        PlaybackDiagnostics.record(event, target.backendTrack, data);
+    }
     private void applyLoop(Slot target) {
         try {
             if (target.stream != null) target.stream.setRepeatMode(target.loop ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
@@ -367,21 +427,32 @@ public class AudioPlaybackService extends Service {
         } catch (RuntimeException error) { PlaybackDiagnostics.record("processing.failed", target.trackId, error.getClass().getSimpleName(), "unsupported", null); }
     }
     private void applyBoost(Slot target, int sessionId) {
-        if (sessionId <= 0) return;
-        if (target.boost <= 1) { if (target.loudness != null) target.loudness.setEnabled(false); return; }
-        try { if (target.loudness == null) target.loudness = new android.media.audiofx.LoudnessEnhancer(sessionId); target.loudness.setTargetGain((int)Math.max(0, 2000 * Math.log10(Math.max(1, target.boost)))); target.loudness.setEnabled(target.boost > 1); }
-        catch (RuntimeException error) { PlaybackDiagnostics.record("processing.gain.unsupported", target.trackId, error.getClass().getSimpleName(), "unsupported", null); }
+        try {
+            if (target.boostSession != sessionId) {
+                if (target.loudness != null) { target.loudness.release(); target.loudness = null; }
+                target.boostSession = sessionId; target.appliedBoost = 1;
+            }
+            if (sessionId <= 0 || target.boost <= 1) {
+                if (target.loudness != null) target.loudness.setEnabled(false);
+                target.appliedBoost = 1; return;
+            }
+            if (target.loudness == null) target.loudness = new android.media.audiofx.LoudnessEnhancer(sessionId);
+            int millibels = Math.round((float)(2000 * Math.log10(target.boost)));
+            target.loudness.setTargetGain(millibels); target.loudness.setEnabled(true);
+            target.appliedBoost = target.loudness.getEnabled() ? (float)Math.pow(10, millibels / 2000.0) : 1;
+        } catch (RuntimeException error) { PlaybackDiagnostics.record("processing.gain.unsupported", target.trackId, error.getClass().getSimpleName(), "unsupported", null); }
     }
     private void release(Slot target) {
         Slot another = target == a ? b : a;
         if (!another.ready || !another.trackId.equals(target.trackId)) MusicCache.get(this).protect(target.trackId, false);
-        if (target == fadingFrom || target == fadingTo) { fadingFrom = null; fadingTo = null; }
+        if (inEnvelope(target)) interruptEnvelope(null);
         if (target == armedFrom || target == armedTo) disarm("release");
         if (target.pending != null) { target.pending.reject("Audio preparation superseded"); target.pending = null; }
         if (target.player != null) { target.player.release(); target.player = null; }
         if (target.stream != null) { target.stream.release(); target.stream = null; }
         if (target.loudness != null) { target.loudness.release(); target.loudness = null; }
-        target.ready = false; target.playing = false; target.ended = false; target.buffering = false; target.gain = 1;
+        target.ready = false; target.playing = false; target.ended = false; target.buffering = false; target.gain = 1; target.fade = 1;
+        target.backendTrack = ""; target.boostSession = 0; target.appliedBoost = 1;
         target.failureReason = null; target.failureMessage = null; target.failureStatus = null; target.bufferingAt = 0;
         target.offline = false; target.sourceUri = ""; target.trackId = "";
         target.artworkGeneration++; target.artwork = null; target.artworkUri = "";
@@ -398,9 +469,9 @@ public class AudioPlaybackService extends Service {
                 checkHandOff();
                 if (fadingFrom != null) {
                     double fraction = Math.max(0, Math.min(1, (SystemClock.elapsedRealtime() - envelopeStart) / (double)envelopeDuration));
-                    fadingFrom.gain = (float)(envelopeGain * (fadingTo == null ? 1 - fraction : Math.cos(fraction * Math.PI / 2))); volume(fadingFrom);
-                    if (fadingTo != null) { fadingTo.gain = (float)Math.sin(fraction * Math.PI / 2); volume(fadingTo); }
-                    if (fraction >= 1) { pause(fadingFrom); fadingFrom = null; fadingTo = null; }
+                    fadingFrom.fade = (float)(envelopeStartGain * (fadingTo == null ? 1 - fraction : Math.cos(fraction * Math.PI / 2))); volume(fadingFrom);
+                    if (fadingTo != null) { fadingTo.fade = (float)Math.sin(fraction * Math.PI / 2); volume(fadingTo); }
+                    if (fraction >= 1) interruptEnvelope(null);
                 }
                 // Paused/idle slots report on their own transitions; the WebView extrapolates the clock between reports.
                 if (SystemClock.elapsedRealtime() - lastReport >= reportEvery) { if (a.playing || a.buffering) report(a); if (b.playing || b.buffering) report(b); lastReport = SystemClock.elapsedRealtime(); }
@@ -409,7 +480,7 @@ public class AudioPlaybackService extends Service {
             long delay = fadingFrom != null ? 16 : (a.playing || b.playing ? 200 : 1000);
             // Wake up close to an armed crossfade point instead of up to 200 ms late.
             if (armedFrom != null && armedFrom.playing && armAt >= 0) { double remain = (armAt - position(armedFrom)) / Math.max(.25, armedFrom.rate); if (remain < .4) delay = Math.min(delay, Math.max(8, (long)(remain * 1000))); }
-            audio.postDelayed(this, delay);
+            audio.removeCallbacks(this); audio.postDelayed(this, delay);
         }
     };
     private void arm(Slot from, JSObject options) {
@@ -442,10 +513,14 @@ public class AudioPlaybackService extends Service {
     private void handOff(double seconds, boolean manual) {
         Slot from = armedFrom, to = armedTo; double position = manual ? 0 : armPosition; String track = armedTrack;
         armedFrom = null; armedTo = null; armedTrack = ""; armAt = -1; armUntil = Double.MAX_VALUE;
-        long now = SystemClock.elapsedRealtime();
-        if (seconds <= .01) { pause(from); to.gain = 1; start(to, position); }
-        else if (manual) { to.gain = 1; start(to, position); fadingFrom = from; fadingTo = null; envelopeGain = from.gain; envelopeStart = now; envelopeDuration = Math.max(1, (long)(seconds * 1000)); }
-        else { to.gain = 0; start(to, position); fadingFrom = from; fadingTo = to; envelopeGain = from.gain; envelopeStart = now; envelopeDuration = Math.max(1, (long)(seconds * 1000)); }
+        to.gain = 1; to.fade = 1;
+        if (seconds <= .01) {
+            if (!start(to, position)) return;
+            pause(from);
+        } else {
+            envelope(from, manual ? null : to, seconds);
+            if (!start(to, position)) { interruptEnvelope(from); return; }
+        }
         boolean screen = ((PowerManager)getSystemService(POWER_SERVICE)).isInteractive();
         PlaybackDiagnostics.record("handoff.done", track, manual ? "manual" : seconds > 0 ? "crossfade" : "end", screen ? "screen-on" : "screen-off", null);
         JSObject value = new JSObject(); value.put("type", "advanced"); value.put("slot", from.id); value.put("to", to.id); value.put("trackId", track);

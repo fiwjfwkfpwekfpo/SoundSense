@@ -90,7 +90,7 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
     diagnostics?.record('player', 'handoff.received', { trackId: to, kind: event.manual ? 'manual' : seconds > 0 ? 'crossfade' : 'end', latencyMs: latency, hidden });
     active = other(active); prepared = to; nextPrepared = ''; nextPreparing = undefined; buffering++; syncLoop();
     const track = library.getTrack(to); if (track) audio.select?.(active, track);
-    skipped = 0; fix(to); if (processing) audio.processing?.(active, processingFor(to));
+    skipped = 0; fix(to, true); if (processing) audio.processing?.(active, processingFor(to), to);
     // The crossfade itself runs in the engine; the state carries only the transition for the
     // animations. The next track is prepared right away (the engine waits for the fade to end),
     // so nothing here depends on a WebView timer that Android may throttle in the background.
@@ -150,7 +150,7 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
     if (!nextId || state.crossfade || nextPrepared === nextId || nextPreparing?.id === nextId && nextPreparing.slot === other(active)) return;
     const token = ++buffering;
     const track = library.getTrack(nextId); if (!track) return;
-    if (processing) audio.processing?.(other(active), processingFor(track.id));
+    if (processing) audio.processing?.(other(active), processingFor(track.id), track.id);
     const pending = nextPreparing = { id: nextId, slot: other(active), promise: audio.prepare(other(active), track, 'preload') };
     try { await pending.promise; if (token === buffering && !disposed) { nextPrepared = nextId; preloadFailed = 0; syncArm(); } }
     catch (error) { if (token === buffering && !disposed) notePreloadFailure(nextId, playbackFailureReason(error), entryId); }
@@ -181,17 +181,17 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
   }
   // The gain of a track is fixed when it starts. A level measured while the track already plays
   // is used from its next start: the volume never changes in the middle of a track.
-  let fixed: { id: string; gain: number; at: number } | undefined;
-  function fix(id: string) { fixed = { id, gain: normalizationGain(id), at: performance.now() }; }
+  let fixed: { id: string; gain: number; started: boolean } | undefined;
+  function fix(id: string, started = false) { fixed = { id, gain: normalizationGain(id), started }; }
   function processingFor(id: string) { const value = processing!.get(id); const gain = fixed?.id === id ? fixed.gain : normalizationGain(id); return gain === 1 ? value : { ...value, volume: value.volume * gain }; }
   function learnLoudness(id: string, level: number) {
     if (loudness.get(id) === level) return; loudness.set(id, level); if (loudness.size > 200) loudness.delete(loudness.keys().next().value!);
     if (!processing) return;
     if (state.trackId === id) {
-      if (fixed?.id === id) { if (state.playing && !state.resolving && performance.now() - fixed.at > 1500) return; fixed = { ...fixed, gain: normalizationGain(id) }; }
-      audio.processing?.(active, processingFor(id));
+      if (fixed?.id === id) { if (fixed.started) return; fixed = { ...fixed, gain: normalizationGain(id) }; }
+      audio.processing?.(active, processingFor(id), id);
     }
-    else if (nextPrepared === id || nextPreparing?.id === id) audio.processing?.(other(active), processingFor(id));
+    else if (nextPrepared === id || nextPreparing?.id === id) audio.processing?.(other(active), processingFor(id), id);
   }
   function syncLoop() { audio.loop?.(active, state.repeat === 'one'); audio.loop?.(other(active), false); }
   // Up to three silent retries per track in five minutes; returns the pause before the retry (0 = give up).
@@ -228,15 +228,14 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
     const track = library.getTrack(item.trackId)!;
     if (reuseNext || pendingNext) audio.select?.(active, track);
     fix(track.id);
-    if (processing) audio.processing?.(active, processingFor(track.id));
+    if (processing) audio.processing?.(active, processingFor(track.id), track.id);
     try {
       const minimumFade = manual && playing && from ? new Promise<void>(resolve => later(resolve, 300)) : Promise.resolve();
       const selected = active;
       await Promise.all([reuseNext ? Promise.resolve() : pendingNext ? pendingNext.catch(error => { if (token !== generation || disposed) throw error; return audio.prepare(selected, track, 'play'); }) : audio.prepare(active, track, 'play'), minimumFade]);
       if (token !== generation || disposed) return;
       audio.stop(old); prepared = track.id; syncLoop(); skipped = 0; unplayable.delete(item.id);
-      if (fixed?.id === track.id) fixed.at = performance.now();
-      if (state.playing) { audio.gain(active, 1); audio.start(active, state.position); }
+      if (state.playing) { if (fixed) fixed.started = true; audio.gain(active, 1); audio.start(active, state.position); }
       diagnostics?.record('player', 'prepare.ready', { trackId: track.id, ms: Math.round(performance.now() - started) });
       publish({ ...state, resolving: false }); void prepareNext();
     } catch (error) {
@@ -266,9 +265,9 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
   }
   function beginOverlap(index: number, seconds: number, position: number) {
     const from = state.trackId!, to = state.queue[index]!.trackId, outgoing = active; active = other(active);
+    fix(to, true); if (processing) audio.processing?.(active, processingFor(to), to);
     if (audio.crossfade) audio.crossfade(outgoing, active, seconds, position); else { audio.gain(active, 0); audio.start(active, position); }
     prepared = to; nextPrepared = ''; overlapEnd = performance.now() + seconds * 1000; syncLoop(); skipped = 0;
-    fix(to); if (processing) audio.processing?.(active, processingFor(to));
     publish({ ...state, currentIndex: index, trackId: to, position, crossfade: { from, to, progress: 0, duration: seconds, fromPosition: state.position, toPosition: position }, transition: { id: ++transitionId, kind: 'crossfade', from, to, duration: seconds * 1000, direction: 1 } });
   }
   function tick() {
@@ -347,7 +346,7 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
       if (!state.trackId) return;
       if (state.playing) { audio.pause(active); audio.pause(other(active)); publish({ ...state, playing: false }); }
       else if (prepared !== state.trackId) void change(state.currentIndex, true, false, 1, state.position);
-      else { const position = state.position >= library.getTrack(state.trackId)!.duration ? 0 : state.position; cancelOverlap(); audio.gain(active, 1); audio.start(active, position); publish({ ...state, playing: true, position }); }
+      else { const position = state.position >= library.getTrack(state.trackId)!.duration ? 0 : state.position; cancelOverlap(); if (fixed) fixed.started = true; audio.gain(active, 1); audio.start(active, position); publish({ ...state, playing: true, position }); }
     },
     resume() { if (!state.playing) this.toggle(); }, next() { advance(); },
     // Within the first 5 s: previous track; later: back to the start (also for the Android notification and headset).
@@ -373,12 +372,12 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
   const unsubscribeSettings = settings.subscribe(() => {
     updateWaveforms();
     const next = settings.getSnapshot().normalize !== false;
-    if (next !== normalizeSetting) { normalizeSetting = next; if (fixed) fixed = { ...fixed, gain: normalizationGain(fixed.id) }; if (processing && state.trackId) audio.processing?.(active, processingFor(state.trackId)); }
+    if (next !== normalizeSetting) { normalizeSetting = next; if (fixed) fixed = { ...fixed, gain: normalizationGain(fixed.id) }; if (processing && state.trackId) audio.processing?.(active, processingFor(state.trackId), state.trackId); }
   });
   const unsubscribeProcessing = processing?.subscribe(() => {
-    if (state.trackId) audio.processing?.(active, processingFor(state.trackId));
+    if (state.trackId) audio.processing?.(active, processingFor(state.trackId), state.trackId);
     const id = state.crossfade?.from ?? (nextPrepared || nextPreparing?.id);
-    if (id) audio.processing?.(other(active), processingFor(id));
+    if (id) audio.processing?.(other(active), processingFor(id), id);
   });
   updateWaveforms();
   return api;

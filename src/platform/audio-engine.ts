@@ -73,7 +73,7 @@ function nativeEngine(resolve: Resolve, options: EngineOptions): AudioEngine {
     stop(slot) { generation[slot]++; resolving[slot]?.abort(); clock[slot] = empty(); command('stop', slot); },
     seek(slot, position) { clock[slot] = { ...clock[slot], position, ended: false, sampledAt: performance.now() }; command('seek', slot, { position }); },
     gain(slot, gain) { command('gain', slot, { gain }); }, loop(slot, loop) { command('loop', slot, { loop }); }, fadeOut(slot, seconds) { command('fadeOut', slot, { seconds }); },
-    processing(slot, values) { rates[slot] = processingRate(values); void NativeAudio.command({ action: 'processing', slot, processing: { rate: rates[slot], pitch: processingPitch(values), volume: values.volume } }).catch(() => options.diagnostics?.record('audio', 'processing.failed', { slot }, 'error')); },
+    processing(slot, values, trackId) { rates[slot] = processingRate(values); void NativeAudio.command({ action: 'processing', slot, trackId, processing: { rate: rates[slot], pitch: processingPitch(values), volume: values.volume } }).catch(() => options.diagnostics?.record('audio', 'processing.failed', { slot }, 'error')); },
     crossfade(from, to, seconds, position) { clock[to] = { position, playing: true, ended: false, buffering: false, sampledAt: performance.now() }; command('crossfade', from, { to, seconds, position }); },
     arm(from, to, plan) {
       if (!plan) { void NativeAudio.command({ action: 'disarm', slot: from }).catch(() => {}); return; }

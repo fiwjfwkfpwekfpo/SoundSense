@@ -28,7 +28,7 @@ export interface AudioEngine {
   gain(slot: AudioSlot, value: number): void;
   /** Loop the slot natively (repeat one): keeps working while the UI thread is frozen in the background. */
   loop?(slot: AudioSlot, enabled: boolean): void;
-  processing?(slot: AudioSlot, values: import('./audio-settings').AudioProcessing): void;
+  processing?(slot: AudioSlot, values: import('./audio-settings').AudioProcessing, trackId: string): void;
   /** Schedule a short envelope on the audio clock, even while JS timers are throttled. */
   fadeOut(slot: AudioSlot, seconds: number): void;
   /** The media clock is authoritative: buffering must never advance a pretend playhead. */

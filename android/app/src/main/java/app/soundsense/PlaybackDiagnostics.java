@@ -35,8 +35,13 @@ final class PlaybackDiagnostics {
     private static void trim() { while (entries.size() > 200) entries.removeFirst(); }
     static synchronized void record(String event, String trackId, String code, String reason, Integer status) {
         if (!ReleaseChannel.debug) return;
-        JSObject entry = new JSObject(); entry.put("atMs", System.currentTimeMillis()); entry.put("event", event); entry.put("trackId", trackId == null ? "" : trackId);
+        JSObject entry = new JSObject();
         if (code != null) entry.put("code", code); if (reason != null) entry.put("reason", reason); if (status != null) entry.put("status", status);
+        record(event, trackId, entry);
+    }
+    static synchronized void record(String event, String trackId, JSObject entry) {
+        if (!ReleaseChannel.debug) return;
+        entry.put("atMs", System.currentTimeMillis()); entry.put("event", event); entry.put("trackId", trackId == null ? "" : trackId);
         entries.add(entry); trim();
         if (!scheduled && file != null) { scheduled = true; io.schedule(PlaybackDiagnostics::persist, 250, TimeUnit.MILLISECONDS); }
     }
