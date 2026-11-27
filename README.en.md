@@ -4,11 +4,12 @@
 
 # SoundSense
 
-**A personal music player for Android and PC.**<br>
+**A personal music player for Android, Windows and Linux.**<br>
 SoundCloud, YouTube Music, Yandex Music and local files in one library.
 
 ![Android](https://img.shields.io/badge/Android-3DDC84?style=flat&logo=android&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-AppImage-FCC624?style=flat&logo=linux&logoColor=black)
+![Windows](https://img.shields.io/badge/Windows-x64-0078D4?style=flat&logo=windows&logoColor=white)
 ![Svelte](https://img.shields.io/badge/Svelte_5-FF3E00?style=flat&logo=svelte&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
 ![Telemetry](https://img.shields.io/badge/telemetry-none-8b5cf6?style=flat)
@@ -76,24 +77,42 @@ SoundCloud, YouTube Music, Yandex Music and local files in one library.
 
 ## Install
 
-Ready-made builds live in the [`releases`](../../tree/releases) branch: `SoundSense-<version>-stable.apk` and `SoundSense-<version>-beta.apk`.
+All builds are on the [**Releases**](../../releases/latest) page. APKs are also kept in the [`releases`](../../tree/releases) branch, where the app gets its updates.
+
+| Platform | File | |
+|---|---|---|
+| **Android** | `SoundSense-<version>-<channel>.apk` | updates itself |
+| **Linux** | `SoundSense-<version>-<channel>-x86_64.AppImage` | updates itself |
+| **Windows** | `…-windows-x64-setup.exe` | installer |
+| | `…-windows-x64-portable.exe` | no install |
 
 | Channel | For whom |
 |---|---|
 | **stable** | everyday use |
 | **beta** | new features first, plugins, log and diagnostic tools |
 
-The channels can be installed side by side: each has its own library and settings. The first APK is installed by hand (Android will ask you to allow installs from the source); after that the app updates itself.
+On Android the channels can be installed side by side: each has its own library and settings. The first APK is installed by hand (Android will ask you to allow installs from the source); after that the app updates itself.
 
 ### Linux
 
-Build the desktop version with `npm run desktop:appimage` (the file appears in `artifacts/desktop/stable/`). Put the AppImage wherever you like (for example `~/Applications`), make it executable and run it. On first start the app adds itself to the menu: `~/.local/share/applications/soundsense.desktop` and icons in `~/.local/share/icons/hicolor/`. If you move the file, the entry is updated on the next start. If AppImageLauncher or a similar tool already manages the AppImage, the app leaves everything alone. Remove the entry with `./SoundSense.AppImage --remove-integration`; turn the automatic step off with `SS_NO_INTEGRATION=1`.
+Download the AppImage from [Releases](../../releases/latest) or build it with `npm run desktop:appimage` (the file appears in `artifacts/desktop/stable/`). Put the AppImage wherever you like (for example `~/Applications`), make it executable and run it. On first start the app adds itself to the menu: `~/.local/share/applications/soundsense.desktop` and icons in `~/.local/share/icons/hicolor/`. If you move the file, the entry is updated on the next start. If AppImageLauncher or a similar tool already manages the AppImage, the app leaves everything alone. Remove the entry with `./SoundSense.AppImage --remove-integration`; turn the automatic step off with `SS_NO_INTEGRATION=1`.
 
 Files follow XDG: settings in `~/.config/soundsense/`, data in `~/.local/share/soundsense/`, cache in `~/.cache/soundsense/`.
 
+### Windows
+
+Windows 10 and 11, x64. Two options, same app inside:
+
+- **setup.exe** — a regular install: Start menu shortcut, uninstall from Apps.
+- **portable.exe** — no install, just run it.
+
+Everything it needs is bundled. The files are not signed yet, so on first launch Windows SmartScreen may warn you: **More info → Run anyway**.
+
+Settings live in `%APPDATA%\SoundSense\`, data and cache in `%LOCALAPPDATA%\SoundSense\`. The portable and installed versions share these folders. Account tokens are encrypted by Windows (DPAPI).
+
 ### Updates
 
-The app watches the `releases` branch. If it holds a version newer than the installed one, the app offers to download it. Before installing, it checks the Ed25519 signature, SHA-256, size, package ID and certificate; it will not accept an older version. Checks run on their own, at launch and on a timer.
+The app watches the `releases` branch. If it holds a version newer than the installed one, the app offers to download it. Before installing, it checks the Ed25519 signature, SHA-256, size, package ID and certificate; it will not accept an older version. Checks run on their own, at launch and on a timer. Windows has no auto-update yet: download new versions from [Releases](../../releases/latest).
 
 ## Plugins
 
@@ -125,6 +144,7 @@ npm run test:ui        # browser tests (Playwright)
 ```sh
 npm run desktop                 # Electron in development mode
 npm run desktop:appimage        # AppImage in artifacts/desktop/
+npm run desktop:win             # Windows x64: installer and portable (build notes in docs/RELEASES.md)
 npm run android:setup           # once: SDK and JDK in .toolchain/
 npm run android:apk:beta        # APK in artifacts/android/beta/
 npm run plugin:catalog          # rebuild the plugin catalog

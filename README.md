@@ -4,11 +4,12 @@
 
 # SoundSense
 
-**Личный музыкальный плеер для Android и ПК.**<br>
+**Личный музыкальный плеер для Android, Windows и Linux.**<br>
 SoundCloud, YouTube Music, Яндекс Музыка и локальные файлы в одной библиотеке.
 
 ![Android](https://img.shields.io/badge/Android-3DDC84?style=flat&logo=android&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-AppImage-FCC624?style=flat&logo=linux&logoColor=black)
+![Windows](https://img.shields.io/badge/Windows-x64-0078D4?style=flat&logo=windows&logoColor=white)
 ![Svelte](https://img.shields.io/badge/Svelte_5-FF3E00?style=flat&logo=svelte&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
 ![Telemetry](https://img.shields.io/badge/телеметрия-нет-8b5cf6?style=flat)
@@ -76,24 +77,42 @@ SoundCloud, YouTube Music, Яндекс Музыка и локальные фа�
 
 ## Установка
 
-Готовые сборки лежат в ветке [`releases`](../../tree/releases): `SoundSense-<версия>-stable.apk` и `SoundSense-<версия>-beta.apk`.
+Все сборки — на странице [**Releases**](../../releases/latest). APK дополнительно лежат в ветке [`releases`](../../tree/releases), оттуда же приложение берёт обновления.
+
+| Платформа | Файл | |
+|---|---|---|
+| **Android** | `SoundSense-<версия>-<канал>.apk` | обновляется само |
+| **Linux** | `SoundSense-<версия>-<канал>-x86_64.AppImage` | обновляется само |
+| **Windows** | `…-windows-x64-setup.exe` | установщик |
+| | `…-windows-x64-portable.exe` | без установки |
 
 | Канал | Для кого |
 |---|---|
 | **stable** | обычное использование |
 | **beta** | новые функции раньше, плагины, журнал и инструменты диагностики |
 
-Каналы можно поставить рядом: у каждого своя библиотека и настройки. Первый раз APK ставится вручную (Android попросит разрешить установку из этого источника), дальше приложение обновляется само.
+На Android каналы можно поставить рядом: у каждого своя библиотека и настройки. Первый раз APK ставится вручную (Android попросит разрешить установку из этого источника), дальше приложение обновляется само.
 
 ### Linux
 
-Сборка ПК-версии: `npm run desktop:appimage` (файл появится в `artifacts/desktop/stable/`). Положи AppImage куда удобно (например, `~/Applications`), сделай исполняемым и запусти. При первом запуске приложение само добавит себя в меню: `~/.local/share/applications/soundsense.desktop` и иконки в `~/.local/share/icons/hicolor/`. Если переместить файл, запись обновится при следующем запуске. Если AppImage уже ведёт AppImageLauncher или похожая программа, приложение ничего не трогает. Убрать запись: `./SoundSense.AppImage --remove-integration`; отключить автоматическую: `SS_NO_INTEGRATION=1`.
+Скачай AppImage из [Releases](../../releases/latest) или собери сам: `npm run desktop:appimage` (файл появится в `artifacts/desktop/stable/`). Положи AppImage куда удобно (например, `~/Applications`), сделай исполняемым и запусти. При первом запуске приложение само добавит себя в меню: `~/.local/share/applications/soundsense.desktop` и иконки в `~/.local/share/icons/hicolor/`. Если переместить файл, запись обновится при следующем запуске. Если AppImage уже ведёт AppImageLauncher или похожая программа, приложение ничего не трогает. Убрать запись: `./SoundSense.AppImage --remove-integration`; отключить автоматическую: `SS_NO_INTEGRATION=1`.
 
 Файлы раскладываются по XDG: настройки в `~/.config/soundsense/`, данные в `~/.local/share/soundsense/`, кэш в `~/.cache/soundsense/`.
 
+### Windows
+
+Windows 10 и 11, x64. Есть два варианта, внутри одно и то же приложение:
+
+- **setup.exe** — обычная установка: ярлык в «Пуске», удаление через «Приложения».
+- **portable.exe** — без установки, просто запусти.
+
+Всё нужное уже внутри, ничего доставлять не надо. Файлы пока не подписаны, поэтому при первом запуске Windows SmartScreen может предупредить: **Подробнее → Выполнить в любом случае**.
+
+Настройки лежат в `%APPDATA%\SoundSense\`, данные и кэш — в `%LOCALAPPDATA%\SoundSense\`. Портативная и установленная версии используют одни и те же папки. Токены аккаунтов шифруются средствами Windows (DPAPI).
+
 ### Обновления
 
-Приложение смотрит на ветку `releases`. Если там версия новее установленной, оно предложит скачать её. Перед установкой проверяются подпись Ed25519, SHA-256, размер, идентификатор и сертификат пакета; откатиться на старую версию приложение не даст. Проверка идёт сама, при запуске и по таймеру.
+Приложение смотрит на ветку `releases`. Если там версия новее установленной, оно предложит скачать её. Перед установкой проверяются подпись Ed25519, SHA-256, размер, идентификатор и сертификат пакета; откатиться на старую версию приложение не даст. Проверка идёт сама, при запуске и по таймеру. На Windows автообновления пока нет: новую версию скачивай из [Releases](../../releases/latest).
 
 ## Плагины
 
@@ -125,6 +144,7 @@ npm run test:ui        # браузерные тесты (Playwright)
 ```sh
 npm run desktop                 # Electron в режиме разработки
 npm run desktop:appimage        # AppImage в artifacts/desktop/
+npm run desktop:win             # Windows x64: установщик и portable (сборка — в docs/RELEASES.md)
 npm run android:setup           # один раз: SDK и JDK в .toolchain/
 npm run android:apk:beta        # APK в artifacts/android/beta/
 npm run plugin:catalog          # пересобрать каталог плагинов
