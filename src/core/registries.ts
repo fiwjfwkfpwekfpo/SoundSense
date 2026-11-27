@@ -117,18 +117,48 @@ export class SourceRegistry extends Registry<SourceProvider> {
   }
 }
 export interface LyricsProvider { id: string; titleKey: string; find(trackId: string, signal?: AbortSignal): Promise<Lyrics | null> }
+/** How precise a text is: word timings > line timings > plain text. */
+export function lyricsRank(lyrics: Lyrics | null | undefined): number { return !lyrics ? 0 : lyrics.synced === false ? 1 : lyrics.words ? 3 : 2; }
+/**
+ * Saved provider order: ids in priority order, a leading "-" marks a provider the user
+ * turned off. Providers missing from the list (new ones, plugins) keep registration order
+ * after the listed ones and are on.
+ */
+export function parseLyricsOrder(value: string): { order: string[]; disabled: Set<string> } {
+  const order: string[] = [], disabled = new Set<string>();
+  for (const raw of value.split(',')) { const item = raw.trim(), id = item.replace(/^-/, ''); if (!id || order.includes(id)) continue; order.push(id); if (item.startsWith('-')) disabled.add(id); }
+  return { order, disabled };
+}
+const LYRICS_GRACE = 1500, LYRICS_MEMORY = 60;
 export class LyricsRegistry extends Registry<LyricsProvider> {
   constructor(events: EventBus) { super('lyrics', events); }
   private running = new Map<string, Promise<Lyrics | null>>();
+  /** Texts that replaced an earlier answer, so the next find() does not go back to the less precise one. */
+  private answers = new Map<string, Lyrics | null>();
+  private listeners = new Set<(trackId: string, lyrics: Lyrics) => void>();
+  private orderSource: () => string = () => '';
+  /** Where the saved order comes from (the settings value). Changing it drops remembered answers. */
+  setOrder(source: () => string) { this.orderSource = source; this.answers.clear(); }
+  orderChanged() { this.answers.clear(); }
+  override register(entry: LyricsProvider): () => void { const dispose = super.register(entry); this.answers.clear(); return () => { dispose(); this.answers.clear(); }; }
+  /** Providers in priority order, with the ones turned off marked. */
+  ordered(): { provider: LyricsProvider; enabled: boolean }[] {
+    const { order, disabled } = parseLyricsOrder(this.orderSource()), all = this.list();
+    const rank = (id: string) => { const index = order.indexOf(id); return index < 0 ? order.length + all.findIndex(item => item.id === id) : index; };
+    return [...all].sort((a, b) => rank(a.id) - rank(b.id)).map(provider => ({ provider, enabled: !disabled.has(provider.id) }));
+  }
+  onUpdate(listener: (trackId: string, lyrics: Lyrics) => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
   /**
-   * All providers are asked at once; the result still follows their priority: the
-   * first synced text in provider order wins, otherwise the first plain text. So the
-   * wait is the slowest provider that matters, not the sum of all of them.
-   * Concurrent requests for one track (prefetch on track change, the lyrics screen)
-   * share one lookup; a caller's signal only stops that caller's wait.
+   * All enabled providers are asked at once. The most precise text wins (word timings >
+   * line timings > plain text); between equally precise texts the user's order decides.
+   * A line-timed text is answered as soon as it cannot lose to a provider above it (or
+   * after a short grace), and is swapped for a word-timed one if that arrives later:
+   * listeners of onUpdate get it and the next find() returns it.
+   * Concurrent requests for one track share one lookup; a caller's signal only stops that caller's wait.
    */
   async find(trackId: string, signal?: AbortSignal): Promise<Lyrics | null> {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (this.answers.has(trackId)) return this.answers.get(trackId)!;
     let shared = this.running.get(trackId);
     if (!shared) { shared = this.lookup(trackId).finally(() => this.running.delete(trackId)); this.running.set(trackId, shared); }
     if (!signal) return shared;
@@ -138,18 +168,38 @@ export class LyricsRegistry extends Registry<LyricsProvider> {
       shared.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
     });
   }
-  private async lookup(trackId: string): Promise<Lyrics | null> {
-    const attempts = this.list().map(provider => withTimeout(Promise.resolve().then(() => provider.find(trackId)), LYRICS_TIMEOUT, provider.id).then(value => ({ value }), (error: unknown) => ({ error })));
-    let failed: unknown, plain: Lyrics | null = null;
-    for (const attempt of attempts) {
-      const result = await attempt;
-      if ('error' in result) { failed ??= result.error; continue; }
-      if (result.value && result.value.synced !== false) return result.value;
-      if (result.value && !plain) plain = result.value;
-    }
-    if (plain) return plain;
-    if (failed) throw failed;
-    return null;
+  private remember(trackId: string, value: Lyrics | null) {
+    this.answers.delete(trackId); this.answers.set(trackId, value);
+    while (this.answers.size > LYRICS_MEMORY) this.answers.delete(this.answers.keys().next().value!);
+  }
+  private lookup(trackId: string): Promise<Lyrics | null> {
+    const providers = this.ordered().filter(item => item.enabled).map(item => item.provider);
+    if (!providers.length) return Promise.resolve(null);
+    return new Promise((resolve, reject) => {
+      const results: (Lyrics | null | undefined)[] = providers.map(() => undefined);
+      let pending = providers.length, failed: unknown, answered: Lyrics | null | undefined, graceTimer: ReturnType<typeof setTimeout> | undefined;
+      const best = () => { let index = -1, rank = 0; results.forEach((value, i) => { const r = lyricsRank(value); if (r > rank) { rank = r; index = i; } }); return { index, rank }; };
+      const answer = (value: Lyrics | null) => { answered = value; clearTimeout(graceTimer); resolve(value); };
+      const settle = () => {
+        const { index, rank } = best(), winner = index >= 0 ? results[index]! : null;
+        if (answered !== undefined) {
+          // Only a strictly more precise text replaces what is already shown.
+          if (winner && lyricsRank(winner) > lyricsRank(answered)) { answered = winner; this.remember(trackId, winner); for (const listener of this.listeners) listener(trackId, winner); }
+          return;
+        }
+        if (!pending) { if (winner) answer(winner); else if (failed) { clearTimeout(graceTimer); reject(failed); } else answer(null); return; }
+        // Everything above the winner has answered: nothing can beat it on equal precision.
+        const above = results.slice(0, Math.max(0, index)).every(value => value !== undefined);
+        if (rank === 3 && above) answer(winner);
+        else if (rank === 2 && above) answer(winner);
+        else if (rank >= 2 && !graceTimer) graceTimer = setTimeout(() => { graceTimer = undefined; if (answered === undefined) { const current = best(); if (current.rank >= 2) answer(results[current.index]!); } }, LYRICS_GRACE);
+      };
+      providers.forEach((provider, i) => {
+        withTimeout(Promise.resolve().then(() => provider.find(trackId)), LYRICS_TIMEOUT, provider.id)
+          .then(value => { results[i] = value ?? null; }, (error: unknown) => { results[i] = null; failed ??= error; })
+          .finally(() => { pending--; settle(); });
+      });
+    });
   }
 }
 export interface ImportProvider {

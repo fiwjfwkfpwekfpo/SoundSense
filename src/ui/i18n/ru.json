@@ -745,5 +745,12 @@
   "window.minimize": "Свернуть",
   "window.maximize": "Развернуть",
   "window.restore": "Восстановить",
-  "window.close": "Закрыть"
+  "window.close": "Закрыть",
+  "provider.deezer": "Текст: Deezer",
+  "lyricsSources.title": "Источники текстов",
+  "lyricsSources.hint": "Сначала выбирается самый точный текст: по словам, потом по строкам, потом обычный. Если точность одинаковая, решает этот порядок.",
+  "lyricsSources.up": "Поднять {name}",
+  "lyricsSources.down": "Опустить {name}",
+  "setting.liveCoversYandex": "Видео из Яндекс Музыки",
+  "setting.liveCoversYandexHint": "Живая обложка трека из Яндекс Музыки. Нужен вход в Яндекс, без него берётся Apple Music."
 }

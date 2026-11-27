@@ -29,9 +29,11 @@ export interface PlayerState {
   resolving?: boolean; notice?: { id: number; key: 'player.fallback' | 'player.skipped' | 'player.alternative' | 'state.notDownloaded' | 'player.audioError' | `player.error.${PlaybackFailureReason}`; from?: SourceKind; to?: SourceKind };
   sleepTimer?: { remaining: number; endOfTrack: boolean; gain: number };
 }
-export interface LyricsLine { time: number; text: string }
-/** `synced: false` means plain text: lines carry no timing. */
-export interface Lyrics { trackId: string; language: 'ru' | 'en'; lines: readonly LyricsLine[]; creditKey: string; synced?: boolean }
+/** One sung word of a line (seconds from the track start); `text` keeps its trailing space. */
+export interface LyricsWord { time: number; end?: number; text: string }
+export interface LyricsLine { time: number; text: string; words?: readonly LyricsWord[] }
+/** `synced: false` means plain text: lines carry no timing. `words: true` — every timed line has word timings. */
+export interface Lyrics { trackId: string; language: 'ru' | 'en'; lines: readonly LyricsLine[]; creditKey: string; synced?: boolean; words?: boolean }
 export type TrackSort = 'added' | 'title' | 'artist' | 'duration';
 export type SettingValue = string | number | boolean;
 export type SettingsValues = Record<string, SettingValue>;

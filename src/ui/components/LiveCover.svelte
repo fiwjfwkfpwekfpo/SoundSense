@@ -3,7 +3,8 @@
   import { onMount } from 'svelte';
   import { useModel } from '../context.svelte';
   /**
-   * Apple Music motion artwork over the player cover. It fades in only once the
+   * Motion artwork over the player cover: a Yandex Music track video (plain MP4) or an
+   * Apple Music album video (HLS). It fades in only once the
    * video really plays, so a slow or missing video never hides the static cover.
    * Muted, looping, paused while the app is in the background.
    */
@@ -23,6 +24,8 @@
     const element = video, source = url; hls?.destroy(); hls = undefined;
     if (!element || !source) return;
     let cancelled = false;
+    // A plain video file plays directly; only HLS playlists need hls.js.
+    if (!/\.m3u8(?:$|\?)/i.test(source)) { element.src = source; void element.play().catch(() => {}); return () => { element.removeAttribute('src'); element.load(); }; }
     // hls.js first: it can cap the rendition to the cover's size (Apple's masters go up to 4K).
     void import('hls.js').then(({ default: Hls }) => {
       if (cancelled) return;

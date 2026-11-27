@@ -745,5 +745,12 @@
   "window.minimize": "Minimize",
   "window.maximize": "Maximize",
   "window.restore": "Restore",
-  "window.close": "Close"
+  "window.close": "Close",
+  "provider.deezer": "Lyrics: Deezer",
+  "lyricsSources.title": "Lyrics sources",
+  "lyricsSources.hint": "The most precise text wins: word-timed, then line-timed, then plain. When precision is equal, this order decides.",
+  "lyricsSources.up": "Move {name} up",
+  "lyricsSources.down": "Move {name} down",
+  "setting.liveCoversYandex": "Videos from Yandex Music",
+  "setting.liveCoversYandexHint": "The track's live cover from Yandex Music. Needs a Yandex sign-in; without it Apple Music is used."
 }

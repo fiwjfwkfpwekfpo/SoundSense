@@ -3,7 +3,11 @@ import type { Track } from './types';
 import { cleanArtist, cleanTitle, sameSong } from './lyrics';
 
 /**
- * Live (animated) covers from Apple Music. The track is found in the public iTunes
+ * Live (animated) covers. First the track's own video from Yandex Music (when the user
+ * is signed in there and turned it on): it belongs to this exact track. Otherwise the
+ * album's motion artwork from Apple Music.
+ *
+ * Apple Music: The track is found in the public iTunes
  * catalogue by title and artist; its album's "editorial video" (the looping square
  * motion artwork the Apple Music app shows) is read from Apple's web catalogue API
  * with the anonymous token the music.apple.com web player itself uses.
@@ -14,7 +18,8 @@ export interface LiveCoversApi { find(track: Track, signal?: AbortSignal): Promi
 type SearchItem = { trackName?: string; artistName?: string; collectionId?: number; trackTimeMillis?: number };
 type Album = { data?: { attributes?: { editorialVideo?: Record<string, { video?: string } | undefined> } }[] };
 
-export function createLiveCovers(http: HttpClient, options: { storage?: Pick<Storage, 'getItem' | 'setItem'>; country?: string } = {}): LiveCoversApi {
+export interface YandexVideos { enabled(): boolean; find(track: Track, signal?: AbortSignal): Promise<string | undefined> }
+export function createLiveCovers(http: HttpClient, options: { storage?: Pick<Storage, 'getItem' | 'setItem'>; country?: string; yandex?: YandexVideos } = {}): LiveCoversApi {
   const found = new Map<string, Promise<string | undefined>>();
   const country = options.country ?? 'us', TOKEN_KEY = 'ss_apple_web_token_v1';
   let token: Promise<string> | undefined;
@@ -55,12 +60,17 @@ export function createLiveCovers(http: HttpClient, options: { storage?: Pick<Sto
   return {
     find(track, signal) {
       if (track.artwork.url && /^blob:|^data:/.test(track.artwork.url)) return Promise.resolve(undefined);
-      let pending = found.get(track.id);
+      // Turning the Yandex videos on or off asks again.
+      const yandex = options.yandex?.enabled() ? options.yandex : undefined, key = `${yandex ? 'ya+' : ''}${track.id}`;
+      let pending = found.get(key);
       if (!pending) {
-        pending = lookup(track, signal).catch(() => undefined);
-        found.set(track.id, pending);
+        pending = (async () => {
+          if (yandex) { const video = await yandex.find(track, signal).catch(() => undefined); if (video) return video; }
+          return lookup(track, signal).catch(() => undefined);
+        })();
+        found.set(key, pending);
         // Failures (network, cancelled) are retried next time; "no live cover" is remembered.
-        void pending.then(value => { if (value === undefined && signal?.aborted) found.delete(track.id); });
+        void pending.then(value => { if (value === undefined && signal?.aborted) found.delete(key); });
         if (found.size > 300) found.delete(found.keys().next().value!);
       }
       return pending;

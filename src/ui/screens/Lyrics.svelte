@@ -5,7 +5,7 @@
   import { useModel } from '../context.svelte';
   import { debugHooks } from '../../core/debug-hooks';
   import { motion, motionTransition } from '../appearance/motion/runtime';
-  import type { Lyrics } from '../../core/types';
+  import type { Lyrics, LyricsLine } from '../../core/types';
   import EmptyState from '../components/EmptyState.svelte';
   import Icon from '../icons/Icon.svelte';
   const ui = useModel();
@@ -26,6 +26,8 @@
       .finally(() => { if (!controller.signal.aborted) loading = false; });
     return () => controller.abort();
   });
+  // A word-timed text that arrives after the line-timed one replaces it in place.
+  $effect(() => ui.api.lyrics.onUpdate?.((id, value) => { if (id === trackId && !loading) lyrics = value; }));
   // Smooth lyrics. The active line is a run of words; a soft highlight edge sweeps
   // through each word in turn (a background-clip gradient moved by the Web Animations
   // API on the compositor clock). JavaScript only aligns the animations with the audio
@@ -38,7 +40,11 @@
     let offset = 0;
     return parts.map(part => { const share = part.trim().length / total, start = offset; offset += share; return { text: part, start, share }; });
   }
-  function timing(line: { time: number; text: string }, next: { time: number } | undefined) {
+  /** What is shown and swept: the real sung words when the text has word timings. */
+  function parts(line: LyricsLine) { return line.words?.length ? line.words.map(word => ({ text: word.text })) : words(line.text); }
+  function timing(line: LyricsLine, next: { time: number } | undefined) {
+    // Word timings from the source: each word fills exactly while it is sung.
+    if (line.words?.length) return line.words.map((word, i, all) => { const end = word.end ?? all[i + 1]?.time ?? Math.min(word.time + .6, next?.time ?? Infinity); return { at: Math.max(0, word.time - line.time), span: Math.max(.06, end - word.time) }; });
     const parts = words(line.text), count = Math.max(1, parts.length);
     // Long instrumental gaps: sing the line at a natural pace instead of stretching it over the gap.
     const length = Math.max(.4, Math.min(next ? next.time - line.time : 4, count * .55 + 1.2) * .96);
@@ -109,7 +115,7 @@
   {#if !embedded}<header><button class="icon-button" aria-label={ui.t('nav.back')} onclick={() => ui.nav.back()}><Icon name="chevron-left" /></button><div><h1>{ui.t('lyrics.title')}</h1><p>{ui.track?.title} · {ui.track?.artist.name}</p></div><button class="icon-button" aria-label={ui.t('nav.close')} onclick={() => ui.nav.back()}><Icon name="close" size="s" /></button></header>{/if}
   {#if loading}<div class="loading" role="status" aria-live="polite"><span class="loading-line"></span><p>{ui.t('lyrics.loading')}</p></div>
   {:else if lyrics && lyrics.synced === false}<div class="lyrics-scroll plain" bind:this={container}><p class="hint">{ui.t('lyrics.plainHint')}</p><div class="plain-text">{#each lyrics.lines as line}<p class:gap={!line.text}>{line.text || '\u00a0'}</p>{/each}</div><p class="credit">{ui.t(lyrics.creditKey)}</p></div>
-  {:else if lyrics}<div class="lyrics-scroll" bind:this={container}><p class="hint">{ui.t('lyrics.seekHint')}</p><div class="lines" bind:this={linesElement}>{#each lyrics.lines as line, index}<button use:motion={{ group: 'lyrics', key: index === active, enabled: index === active }} class:active={index === active} class:past={index < active} class:karaoke={index === active && smooth} data-line={index} aria-current={index === active ? 'true' : undefined} onclick={() => ui.api.player.seek(line.time)}>{#if index === active && smooth}{#each words(line.text) as word}<span class="word">{word.text}</span>{/each}{:else}{line.text}{/if}</button>{/each}</div><p class="credit">{ui.t(lyrics.creditKey)}</p></div>{:else}<EmptyState title={ui.t(failed ? 'lyrics.failed' : 'lyrics.empty')} description={ui.t(failed ? 'lyrics.failedSub' : 'lyrics.emptySub')} icon="lyrics" />{#if failed}<button class="retry text-action" onclick={() => retry++}>{ui.t('state.retry')}</button>{/if}{/if}
+  {:else if lyrics}<div class="lyrics-scroll" bind:this={container}><p class="hint">{ui.t('lyrics.seekHint')}</p><div class="lines" bind:this={linesElement}>{#each lyrics.lines as line, index}<button use:motion={{ group: 'lyrics', key: index === active, enabled: index === active }} class:active={index === active} class:past={index < active} class:karaoke={index === active && smooth} data-line={index} aria-current={index === active ? 'true' : undefined} onclick={() => ui.api.player.seek(line.time)}>{#if index === active && smooth}{#each parts(line) as word}<span class="word">{word.text}</span>{/each}{:else}{line.text}{/if}</button>{/each}</div><p class="credit">{ui.t(lyrics.creditKey)}</p></div>{:else}<EmptyState title={ui.t(failed ? 'lyrics.failed' : 'lyrics.empty')} description={ui.t(failed ? 'lyrics.failedSub' : 'lyrics.emptySub')} icon="lyrics" />{#if failed}<button class="retry text-action" onclick={() => retry++}>{ui.t('state.retry')}</button>{/if}{/if}
 {#if !embedded}<Dock nav={!sideNav} />{/if}</section>
 <style>
   .plain-text p { font-size: calc(var(--font-size-l) * var(--font-scale)); line-height: var(--line-height-body); color: var(--color-text); padding: 0 calc(var(--space-6) + var(--inset-left)); margin: 0 0 var(--space-1); }

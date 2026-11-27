@@ -65,7 +65,11 @@ export interface PlayerApi {
   setSleepTimer(minutes: number | 'track' | null): void;
   dispose(): void;
 }
-export interface LyricsApi { getLyrics(trackId: string, signal?: AbortSignal): Promise<Lyrics | null> }
+export interface LyricsApi {
+  getLyrics(trackId: string, signal?: AbortSignal): Promise<Lyrics | null>;
+  /** A more precise text arrived after the first answer (word timings after line timings). */
+  onUpdate?(listener: (trackId: string, lyrics: Lyrics) => void): () => void;
+}
 export interface SettingsApi {
   getSnapshot(): SettingsValues;
   subscribe(listener: (values: SettingsValues) => void): Unsubscribe;

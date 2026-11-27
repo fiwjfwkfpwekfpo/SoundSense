@@ -12,7 +12,7 @@ import { sameRecording } from './matching';
 import type { DiagnosticsApi } from './diagnostics';
 import { errorDetails } from './diagnostics';
 
-interface YaTrack { id?: string | number; title?: string; version?: string; durationMs?: number; available?: boolean; coverUri?: string; artists?: readonly { id: string | number; name: string }[]; albums?: readonly { id: string | number }[]; explicit?: boolean; contentWarning?: string }
+interface YaTrack { id?: string | number; title?: string; version?: string; durationMs?: number; backgroundVideoUri?: string; available?: boolean; coverUri?: string; artists?: readonly { id: string | number; name: string }[]; albums?: readonly { id: string | number }[]; explicit?: boolean; contentWarning?: string }
 interface Ref { id?: string | number; albumId?: string | number; track?: YaTrack; richData?: YaTrack; title?: string; durationMs?: number }
 interface YaPlaylist { uid?: string | number; kind?: string | number; playlistUuid?: string; title?: string; trackCount?: number; tracks?: readonly Ref[]; owner?: { uid?: string | number; login?: string }; volumes?: readonly (readonly YaTrack[])[] }
 const headers = { Accept: 'application/json', 'X-Yandex-Music-Client': 'YandexMusicAndroid/24023231' };
@@ -214,5 +214,21 @@ export function createYandex(http: HttpClient, token: () => Promise<string | und
     }
     return result.synced || result.plain ? result : null;
   }
-  return { account, inspect, collection, search, getTrack, stream, lyrics };
+  /**
+   * The looping video Yandex Music shows behind a track (its "canvas"). Yandex only
+   * gives it to signed-in clients. The track is taken by its Yandex id or found by
+   * title, artist and duration.
+   */
+  async function backgroundVideo(track: Track, signal?: AbortSignal): Promise<string | undefined> {
+    const id = track.sources.find(source => source.kind === 'ya')?.externalId?.replace(/^ya-/, '');
+    let raw: YaTrack | undefined;
+    if (id && /^\d+(?::\d+)?$/.test(id)) raw = (await api<readonly YaTrack[]>(`/tracks/${encodeURIComponent(id)}`, signal, undefined, 'required'))[0];
+    else {
+      const data = await api<{ tracks?: { results?: readonly YaTrack[] } }>(`/search?${new URLSearchParams({ text: `${track.artist.name} ${track.title}`, type: 'track', page: '0', nocorrect: 'false' })}`, signal, undefined, 'required');
+      raw = (data.tracks?.results ?? []).slice(0, 10).find(item => { const candidate = yandexTrack(item); return item.available !== false && !!candidate && sameRecording({ title: track.title, artist: track.artist.name, duration: track.duration }, { title: candidate.title, artist: candidate.artist.name, duration: candidate.duration }); });
+    }
+    const uri = raw?.backgroundVideoUri;
+    return uri && /^https:\/\//.test(uri) ? uri : undefined;
+  }
+  return { account, inspect, collection, search, getTrack, stream, lyrics, backgroundVideo };
 }

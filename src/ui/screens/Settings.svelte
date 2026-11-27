@@ -29,7 +29,7 @@
   let sections = $derived(ui.contributions('settingsSections').filter(section => ui.settingDefinitions.some(definition => definition.section === section.section && !definition.hidden)));
   let definitions = $derived(ui.settingDefinitions.filter(definition => (definition.key !== 'waveCacheLimit' || !!ui.api.waveCache) && (definition.section !== 'offline' || !!ui.api.offline) && (definition.key !== 'wifiOnly' || !isDesktop())));
   // Items shown for the first time on this device are marked new (see new-badges.ts).
-  $effect.pre(() => { noteFeatures([...definitions.filter(definition => !definition.hidden).map(definition => definition.key), ...(ui.api.plugins ? ['screen.plugins'] : []), ...(ui.api.releaseChannel ? ['screen.releaseChannel'] : [])]); });
+  $effect.pre(() => { noteFeatures([...definitions.filter(definition => !definition.hidden).map(definition => definition.key), ...(ui.api.plugins ? ['screen.plugins'] : []), 'lyricsOrder', ...(ui.api.releaseChannel ? ['screen.releaseChannel'] : [])]); });
   let waveStats = $state<{ bytes: number; count: number } | null>(null), clearingWaves = $state(false);
   let powerState = $state<PlaybackPowerState>();
   onMount(() => {
@@ -38,6 +38,18 @@
     return power.subscribe(value => powerState = value);
   });
   $effect(() => { if (ui.api.waveCache) void ui.api.waveCache.getStats().then(value => waveStats = value).catch(() => {}); });
+  // Lyrics providers: the order breaks ties between equally precise texts; each can be turned off.
+  let lyricsRevision = $state(0);
+  onMount(() => ui.api.extensions.events.on('registry:change', value => { if (value.registry === 'lyrics') lyricsRevision++; }));
+  let lyricsProviders = $derived.by(() => { void lyricsRevision; void ui.settings.values.lyricsOrder; return ui.api.extensions.lyrics.ordered(); });
+  function saveLyrics(list: readonly { id: string; enabled: boolean }[]) { ui.settings.set('lyricsOrder', list.map(item => `${item.enabled ? '' : '-'}${item.id}`).join(',')); }
+  function moveLyrics(index: number, step: -1 | 1) {
+    const list = lyricsProviders.map(item => ({ id: item.provider.id, enabled: item.enabled })), target = index + step;
+    if (target < 0 || target >= list.length) return;
+    [list[index], list[target]] = [list[target]!, list[index]!]; saveLyrics(list);
+  }
+  function toggleLyrics(index: number) { saveLyrics(lyricsProviders.map((item, i) => ({ id: item.provider.id, enabled: i === index ? !item.enabled : item.enabled }))); }
+  const providerName = (key: string) => { const text = ui.t(key); return text.replace(/^(?:Текст|Lyrics):\s*/, ''); };
   async function clearWaves() {
     if (!ui.api.waveCache || clearingWaves) return;
     clearingWaves = true;
@@ -52,6 +64,14 @@
   <div class="layout"><div class="tabs" role="tablist" aria-label={ui.t('nav.settings')}>{#each tabs as item}<button role="tab" aria-selected={tab === item.id} class:active={tab === item.id} onclick={() => tab = item.id}><Icon name={item.icon} size="s" /><span>{ui.t(`settings.tab.${item.id}`)}</span></button>{/each}</div>
   <div class="content"><div class="tab-hint">{ui.t(`settings.tab.${tab}.hint`)}</div>
   {#if tab === 'playback' && ui.api.playbackPower}<section class="settings-section"><div class="group"><div class="setting action"><div class="setting-label"><span class="label">{ui.t('background.title')}<small class="setting-hint">{ui.t(powerState?.unrestricted ? 'background.unrestricted' : 'background.restricted')}</small></span></div><Button variant="secondary" onclick={() => ui.nav.sheet({ kind: 'playbackPower' })}>{ui.t('background.configure')}</Button></div></div></section>{/if}
+  {#if tab === 'sources' && lyricsProviders.length}<section class="settings-section" data-testid="lyrics-sources"><header><h2>{ui.t('lyricsSources.title')}{#if isNew('lyricsOrder')}<span class="new-badge">{ui.t('settings.new')}</span>{/if}</h2></header><p class="hint section-hint">{ui.t('lyricsSources.hint')}</p><div class="group">
+    {#each lyricsProviders as item, index (item.provider.id)}<div class="setting lyrics-source" class:off={!item.enabled}>
+      <span class="order">{index + 1}</span><span class="label name">{providerName(item.provider.titleKey)}</span>
+      <button class="icon-button move up" aria-label={ui.t('lyricsSources.up', { name: providerName(item.provider.titleKey) })} disabled={index === 0} onclick={() => moveLyrics(index, -1)}><Icon name="chevron-down" size="s" /></button>
+      <button class="icon-button move" aria-label={ui.t('lyricsSources.down', { name: providerName(item.provider.titleKey) })} disabled={index === lyricsProviders.length - 1} onclick={() => moveLyrics(index, 1)}><Icon name="chevron-down" size="s" /></button>
+      <button class="switch-hit" role="switch" aria-checked={item.enabled} aria-label={providerName(item.provider.titleKey)} onclick={() => toggleLyrics(index)}><span class="switch" class:on={item.enabled}><i></i></span></button>
+    </div>{/each}
+  </div></section>{/if}
   {#if tab === 'sources' && ui.api.account}<section class="settings-section"><header><h2>{ui.t('source.ya')}</h2></header><YandexAccount onconnected={() => ui.nav.go({ name: 'import', source: 'ya' })} /></section>{/if}
   {#each sections.filter(item => (tabOf[item.section] ?? 'app') === tab && !definitions.filter(s => s.section === item.section && !s.hidden).every(s => s.disabled)) as contribution}{@const section = contribution.section}<section class="settings-section">{#if ui.t(contribution.titleKey) !== ui.t(`settings.tab.${tab}`)}<header><h2>{ui.t(contribution.titleKey)}</h2></header>{/if}<div class="group">
     {#each definitions.filter(s => s.section === section && !s.hidden) as definition}
@@ -132,6 +152,13 @@
   .switch.on { background: var(--color-accent); }
   .switch.on i { background: var(--color-on-accent); transform: translateX(calc(var(--switch-width) - var(--switch-knob) - var(--switch-inset) * 2)); }
   .disabled label { opacity: var(--opacity-disabled); }
+  .section-hint { margin: 0 0 var(--space-3); font-size: calc(var(--font-size-xs) * var(--font-scale)); }
+  .lyrics-source { justify-content: start; gap: var(--space-1); }
+  .lyrics-source .order { min-width: var(--space-5); color: var(--color-text-subtle); font-size: calc(var(--font-size-xs) * var(--font-scale)); font-variant-numeric: tabular-nums; }
+  .lyrics-source .name { flex: 1; font-size: calc(var(--font-size-sm) * var(--font-scale)); }
+  .lyrics-source.off .name, .lyrics-source.off .order { opacity: var(--opacity-disabled); }
+  .lyrics-source .move:disabled { opacity: var(--opacity-disabled); }
+  .lyrics-source .move.up :global(svg) { transform: rotate(180deg); }
   .hint { font-size: calc(var(--font-size-s) * var(--font-scale)); color: var(--color-text-muted); line-height: var(--line-height-body); margin: var(--space-5) 0; }
   footer { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); margin-top: var(--space-8); color: var(--color-text-muted); }
   footer button { color: var(--color-text); font-size: calc(var(--font-size-m) * var(--font-scale)); }

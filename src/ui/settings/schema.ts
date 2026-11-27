@@ -4,6 +4,7 @@ import { appearanceSchema, colorIds, motionGroups, motionIds, styleIds } from '.
 import type { AppearanceAxis } from '../appearance/schema';
 import { BETA_FEATURES } from '../../core/build';
 import { isDesktop } from '../../platform/desktop';
+import { DEFAULT_LYRICS_ORDER } from '../../core/lyrics';
 export type SettingSection = 'appearance' | 'home' | 'playback' | 'sound' | 'offline' | 'sync' | 'sources' | 'updates';
 export type SettingDefinition = SettingDescriptor;
 export const settingsSchema: readonly SettingDefinition[] = [
@@ -27,6 +28,7 @@ export const settingsSchema: readonly SettingDefinition[] = [
   { key: 'beatPulse', section: 'appearance', type: 'toggle', default: true, sync: true, beta: true, hidden: !BETA_FEATURES, label: 'setting.beatPulse', hint: 'setting.beatPulseHint', since: '1.1.0' },
   { key: 'beatParticles', section: 'appearance', type: 'toggle', default: true, sync: true, beta: true, hidden: !BETA_FEATURES, label: 'setting.beatParticles', hint: 'setting.beatParticlesHint', since: '1.1.0' },
   { key: 'liveCovers', section: 'appearance', type: 'toggle', default: true, sync: true, beta: true, hidden: !BETA_FEATURES, label: 'setting.liveCovers', hint: 'setting.liveCoversHint', since: '1.1.0' },
+  { key: 'liveCoversYandex', section: 'appearance', type: 'toggle', default: true, sync: true, beta: true, hidden: !BETA_FEATURES, label: 'setting.liveCoversYandex', hint: 'setting.liveCoversYandexHint', since: '1.4.14' },
   { key: 'recommendations', section: 'home', type: 'toggle', default: true, sync: true, label: 'setting.recommendations', since: '0.6.0' },
   { key: 'charts', section: 'home', type: 'toggle', default: true, sync: true, label: 'setting.charts', since: '0.6.0' },
   { key: 'chartYa', section: 'home', type: 'toggle', default: true, sync: true, label: 'setting.chartYa' },
@@ -38,6 +40,8 @@ export const settingsSchema: readonly SettingDefinition[] = [
   { key: 'backgroundPromptSeen', section: 'playback', type: 'toggle', default: false, sync: false, label: 'background.title', hidden: true },
   { key: 'haptics', section: 'playback', type: 'toggle', default: true, sync: false, label: 'setting.haptics' },
   { key: 'waveform', section: 'playback', type: 'toggle', default: true, sync: true, label: 'setting.waveform' },
+  // Lyrics providers in priority order; "-id" = turned off. Edited in Settings → Sources.
+  { key: 'lyricsOrder', section: 'sources', type: 'text', default: DEFAULT_LYRICS_ORDER, sync: true, label: 'lyricsSources.title', hidden: true },
   { key: 'lyricsSmooth', section: 'playback', type: 'toggle', default: true, sync: true, label: 'setting.lyricsSmooth', since: '1.0.2' },
   { key: 'waveformZoom', section: 'playback', type: 'toggle', default: true, sync: true, label: 'setting.waveformZoom', since: '0.6.0' },
   { key: 'waveCacheLimit', section: 'playback', type: 'slider', default: 32, min: 8, max: 128, step: 8, sync: false, label: 'setting.waveCacheLimit', unit: 'common.mb' },
