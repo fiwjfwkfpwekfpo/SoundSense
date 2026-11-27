@@ -1,19 +1,27 @@
 {
-  "version": "1.4.13",
+  "version": "1.4.14",
   "android": {
     "ru": [
-      "Исправлено: синхронизация между устройствами — теперь работает и там, где закрыт сервер PeerJS."
+      "Добавлен выбор порядка источников текстов.",
+      "Добавлены тексты с подсветкой по словам.",
+      "Добавлены живые обложки из Яндекс Музыки."
     ],
     "en": [
-      "Fixed: device sync now works where the PeerJS server is blocked."
+      "Added lyrics source order.",
+      "Added word-by-word lyrics highlighting.",
+      "Added live covers from Yandex Music."
     ]
   },
   "desktop": {
     "ru": [
-      "Исправлено: синхронизация между устройствами — теперь работает и там, где закрыт сервер PeerJS."
+      "Добавлен выбор порядка источников текстов.",
+      "Добавлены тексты с подсветкой по словам.",
+      "Добавлены живые обложки из Яндекс Музыки."
     ],
     "en": [
-      "Fixed: device sync now works where the PeerJS server is blocked."
+      "Added lyrics source order.",
+      "Added word-by-word lyrics highlighting.",
+      "Added live covers from Yandex Music."
     ]
   }
 }
