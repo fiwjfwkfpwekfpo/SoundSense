@@ -3,7 +3,7 @@
  * Release: checks → APK → signed manifest → `releases` branch of the GitHub repository → (the Telegram bot announces it).
  *
  *   node scripts/release/publish.mjs [--channel=stable|beta] [--skip-tests] [--skip-build]
- *                                    [--full-tests] [--skip-desktop] [--telegram] [--dry-run]
+ *                                    [--full-tests] [--skip-desktop] [--skip-windows] [--telegram] [--dry-run]
  *
  * The app looks at `<channel>.json` in the `releases` branch. If its versionCode is higher than the
  * installed one, the app downloads the APK listed there (size, SHA-256 and the Ed25519 signature
@@ -27,7 +27,7 @@ const args = new Set(process.argv.slice(2));
 const dry = args.has('--dry-run');
 const channel = releaseChannel([...args].find(arg => arg.startsWith('--channel='))?.slice('--channel='.length) ?? process.env.SS_CHANNEL ?? 'stable');
 if (args.has('--help')) {
-  console.log('Usage: npm run release:stable|release:beta -- [--dry-run] [--skip-tests] [--skip-build] [--full-tests] [--skip-desktop] [--telegram]');
+  console.log('Usage: npm run release:stable|release:beta -- [--dry-run] [--skip-tests] [--skip-build] [--full-tests] [--skip-desktop] [--skip-windows] [--telegram]');
   console.log('--dry-run builds, verifies and signs locally without pushing to the releases branch or posting to Telegram.');
   process.exit(0);
 }
@@ -86,6 +86,14 @@ if (withDesktop) {
   if (!existsSync(appImage)) fail('AppImage not found');
   console.log(`${basename(appImage)}: ${statSync(appImage).size} bytes`);
 }
+// Windows x64: installer and portable build, downloaded from the GitHub release (no in-app updates yet).
+const withWindows = withDesktop && !args.has('--skip-windows');
+const windowsDir = join(root, `artifacts/desktop/${channel.name}/windows-x64`);
+const windowsFiles = ['setup', 'portable'].map(kind => join(windowsDir, `SoundSense-${version}-${channel.name}-windows-x64-${kind}.exe`));
+if (withWindows) {
+  if (!args.has('--skip-build')) { step('Build Windows x64'); run('npm', ['run', channel.name === 'beta' ? 'desktop:win:beta' : 'desktop:win']); }
+  for (const file of windowsFiles) { if (!existsSync(file)) fail(`${basename(file)} not found`); console.log(`${basename(file)}: ${statSync(file).size} bytes`); }
+}
 
 step('Sign manifest');
 const signed = join(BUILDS, `${channel.name}-${version}.json`);
@@ -110,7 +118,7 @@ function uploadAssets(files) {
   let release = github('GET', `${base}/releases/tags/${tag}`);
   if (release.status === 404) {
     const section = (title, list) => [`### ${title}`, '', ...list.ru.map(line => `- ${line}`), '', ...list.en.map(line => `- ${line}`), ''];
-    const body = ['## SoundSense ' + version, '', ...(withDesktop ? section('Desktop', notes.desktop) : []), ...section('Android', notes.android), 'Desktop builds are downloaded by the in-app updater; the Android packages are in the `releases` branch.'].join('\n');
+    const body = ['## SoundSense ' + version, '', ...(withDesktop ? section('Desktop', notes.desktop) : []), ...section('Android', notes.android), withWindows ? 'Linux builds are downloaded by the in-app updater; Windows builds are the .exe files below (installer or portable); the Android packages are in the `releases` branch.' : 'Desktop builds are downloaded by the in-app updater; the Android packages are in the `releases` branch.'].join('\n');
     release = github('POST', `${base}/releases`, { json: { tag_name: tag, target_commitish: run('git', ['rev-parse', 'HEAD'], { capture: true }).trim(), name: `SoundSense ${version}`, body, draft: false, prerelease: false } });
   }
   if (![200, 201].includes(release.status) || !release.body?.id) fail(`GitHub release ${tag}: HTTP ${release.status} ${release.body?.message ?? ''} (is the commit pushed?)`);
@@ -133,7 +141,7 @@ function uploadAsset(release, file, tag) {
   if (uploaded.status !== 201) fail(`Upload failed: HTTP ${uploaded.status} ${uploaded.body?.message ?? ''}`);
 }
 
-if (!dry) { step('Upload release assets'); uploadAssets(withDesktop ? [apk, appImage] : [apk]); }
+if (!dry) { step('Upload release assets'); uploadAssets([apk, ...(withDesktop ? [appImage] : []), ...(withWindows ? windowsFiles : [])]); }
 
 if (!dry) {
   step(`Publish to the ${BRANCH} branch`);

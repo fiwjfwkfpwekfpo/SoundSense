@@ -1,65 +1,37 @@
 {
-  "version": "1.4.14",
+  "version": "1.4.15",
   "android": {
     "ru": [
-      "Добавлен выбор порядка источников текстов.",
-      "Добавлены тексты с подсветкой по словам.",
-      "Добавлены живые обложки из Яндекс Музыки."
+      "Оптимизировано переключение треков и строк текста.",
+      "Исправлено перетаскивание треков в очереди.",
+      "Исправлено пропадание звука после переключения и перемотки.",
+      "Улучшено качество звука в резервных источниках.",
+      "Исправлено приглушение после кроссфейда."
     ],
     "en": [
-      "Added lyrics source order.",
-      "Added word-by-word lyrics highlighting.",
-      "Added live covers from Yandex Music."
+      "Optimized track and lyrics transitions.",
+      "Fixed dragging tracks in the queue.",
+      "Fixed silent playback after skipping and seeking.",
+      "Improved sound quality from fallback sources.",
+      "Fixed low volume after an interrupted crossfade."
     ]
   },
   "desktop": {
     "ru": [
-      "Добавлен выбор порядка источников текстов.",
-      "Добавлены тексты с подсветкой по словам.",
-      "Добавлены живые обложки из Яндекс Музыки."
+      "Оптимизировано переключение треков и строк текста.",
+      "Исправлено перетаскивание треков в очереди.",
+      "Исправлено пропадание звука после переключения и перемотки.",
+      "Улучшено качество звука в резервных источниках.",
+      "Добавлено приложение для Windows x64.",
+      "Исправлено искажение звука на громких треках."
     ],
     "en": [
-      "Added lyrics source order.",
-      "Added word-by-word lyrics highlighting.",
-      "Added live covers from Yandex Music."
+      "Optimized track and lyrics transitions.",
+      "Fixed dragging tracks in the queue.",
+      "Fixed silent playback after skipping and seeking.",
+      "Improved sound quality from fallback sources.",
+      "Added Windows x64 packages.",
+      "Fixed distorted sound on loud tracks."
     ]
-  },
-  "unreleased": {
-    "android": {
-      "ru": [
-        "Оптимизировано переключение треков и строк текста.",
-        "Исправлено перетаскивание треков в очереди.",
-        "Исправлено пропадание звука после переключения и перемотки.",
-        "Обновлено правило выбора качества потока.",
-        "Исправлено приглушение после кроссфейда."
-      ],
-      "en": [
-        "Optimized track and lyrics transitions.",
-        "Fixed dragging tracks in the queue.",
-        "Fixed silent playback after skipping and seeking.",
-        "Improved stream quality selection.",
-        "Fixed low volume after an interrupted crossfade."
-      ]
-    },
-    "desktop": {
-      "ru": [
-        "Оптимизировано переключение треков и строк текста.",
-        "Исправлено перетаскивание треков в очереди.",
-        "Исправлено пропадание звука после переключения и перемотки.",
-        "Обновлено правило выбора качества потока.",
-        "Добавлено приложение для Windows x64.",
-        "Добавлено ограничение пиков громкости.",
-        "Добавлено измерение параметров звука."
-      ],
-      "en": [
-        "Optimized track and lyrics transitions.",
-        "Fixed dragging tracks in the queue.",
-        "Fixed silent playback after skipping and seeking.",
-        "Improved stream quality selection.",
-        "Added Windows x64 packages.",
-        "Added output peak limiting.",
-        "Added audio quality diagnostics."
-      ]
-    }
   }
 }
