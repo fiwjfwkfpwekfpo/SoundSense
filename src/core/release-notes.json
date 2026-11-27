@@ -2,18 +2,42 @@
   "version": "1.4.16",
   "android": {
     "ru": [
-      "Изменения только для Windows, на Android всё как прежде."
+      "Один раз удали старую версию и поставь эту вручную: у приложения новая подпись.",
+      "Добавлены тексты с подсветкой по словам и выбор порядка источников текстов.",
+      "Исправлена остановка музыки в фоне.",
+      "Исправлена синхронизация между устройствами.",
+      "Исправлены приглушение после кроссфейда и пропадание звука после перемотки.",
+      "Улучшено воспроизведение при нестабильной сети.",
+      "Оптимизировано переключение треков и строк текста."
     ],
     "en": [
-      "Windows-only changes; Android stays the same."
+      "Uninstall the old version once and install this one by hand: the app has a new signature.",
+      "Added word-by-word lyrics and a lyrics source order.",
+      "Fixed music stopping in the background.",
+      "Fixed sync between devices.",
+      "Fixed low volume after a crossfade and silence after seeking.",
+      "Improved playback on unstable networks.",
+      "Optimized track and lyrics transitions."
     ]
   },
   "desktop": {
     "ru": [
-      "Добавлено автообновление для Windows."
+      "Добавлено приложение для Windows с автообновлением.",
+      "Добавлено автообновление на Linux.",
+      "Добавлена панель окна, плеер подстраивается под размер окна.",
+      "Добавлены тексты с подсветкой по словам и выбор порядка источников текстов.",
+      "Исправлено искажение звука на громких треках.",
+      "Исправлена синхронизация между устройствами.",
+      "Оптимизировано переключение треков и строк текста."
     ],
     "en": [
-      "Added auto-update on Windows."
+      "Added the Windows app with auto-update.",
+      "Added auto-update on Linux.",
+      "Added a window bar; the player adapts to the window size.",
+      "Added word-by-word lyrics and a lyrics source order.",
+      "Fixed distorted sound on loud tracks.",
+      "Fixed sync between devices.",
+      "Optimized track and lyrics transitions."
     ]
   }
 }
