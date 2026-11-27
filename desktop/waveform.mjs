@@ -15,7 +15,9 @@ import { fileURLToPath } from 'node:url';
 const POINTS = 1000, VERSION = 2, RHYTHM_FPS = 20, MAX_RHYTHM = 20 * 7200, TIMEOUT = 240_000;
 // The AppImage carries its own static ffmpeg (scripts/build-ffmpeg.mjs); development uses the one in .toolchain.
 const here = dirname(fileURLToPath(import.meta.url));
-const FFMPEG = process.env.SS_FFMPEG ?? [process.resourcesPath && join(process.resourcesPath, 'ffmpeg', 'ffmpeg'), join(here, '..', '.toolchain', 'ffmpeg', 'ffmpeg')].find(path => path && existsSync(path)) ?? 'ffmpeg';
+const executable = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+const FFMPEG = process.env.SS_FFMPEG ?? [process.resourcesPath && join(process.resourcesPath, 'ffmpeg', executable),
+  join(here, '..', '.toolchain', process.platform === 'win32' ? 'ffmpeg-win32-x64' : 'ffmpeg', executable)].find(path => path && existsSync(path)) ?? executable;
 
 /** Bytes of a stream: a progressive file, or the init + media segments of an HLS playlist (unencrypted only). */
 async function* streamBytes(input, headers, signal) {
@@ -39,7 +41,7 @@ export function createWaveforms(paths, emit, music) {
   const jobs = new Map(), streams = new Map();
   let available, limit = 32 * 1024 * 1024, running = 0; const waiting = [];
   void readFile(limitFile, 'utf8').then(text => { const value = JSON.parse(text).bytes; if (Number.isFinite(value)) limit = value; }).catch(() => {});
-  const hasFfmpeg = () => available ??= spawnSync(FFMPEG, ['-version'], { stdio: 'ignore' }).status === 0;
+  const hasFfmpeg = () => available ??= spawnSync(FFMPEG, ['-version'], { windowsHide: true, stdio: 'ignore' }).status === 0;
   const file = key => join(directory, `${createHash('sha256').update(`local:${key}:${VERSION}`).digest('hex')}.wfm`);
   async function readCache(key) {
     try {
@@ -74,7 +76,7 @@ export function createWaveforms(paths, emit, music) {
       // Streams are fetched here and piped in: the bundled ffmpeg has no network code at all.
       const remote = /^https:/.test(input);
       const args = ['-hide_banner', '-nostdin', '-loglevel', 'info', '-i', remote ? 'pipe:0' : input, '-map', '0:a:0', '-vn', '-sn', '-dn', '-af', 'pan=mono|c0=c0', '-f', 'f32le', '-acodec', 'pcm_f32le', 'pipe:1'];
-      const child = spawn(FFMPEG, args, { stdio: [remote ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
+      const child = spawn(FFMPEG, args, { windowsHide: true, stdio: [remote ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
       const feed = new AbortController();
       if (remote) {
         child.stdin.on('error', () => {}); // ffmpeg may stop reading early (cancel, broken file).

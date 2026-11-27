@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
@@ -12,11 +12,17 @@ import { spawnSync } from 'node:child_process';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const pkg = resolve(root, 'node_modules/electron');
 const { version } = JSON.parse(await readFile(resolve(pkg, 'package.json'), 'utf8'));
-const dist = resolve(pkg, 'dist');
+const target = process.argv[2] ?? process.platform;
+if (!['linux', 'win32'].includes(target)) throw new Error('Expected linux or win32');
+const arch = target === 'win32' ? 'x64' : process.arch;
+const native = target === process.platform && arch === process.arch;
+const dist = native ? resolve(pkg, 'dist') : resolve(root, '.toolchain', `electron-${target}-${arch}`);
+const executable = target === 'win32' ? 'electron.exe' : 'electron';
 try {
+  await access(resolve(dist, executable));
   if ((await readFile(resolve(dist, 'version'), 'utf8')).trim().replace(/^v/, '') === version) { console.log(`Electron ${version} is ready.`); process.exit(0); }
 } catch { /* Not installed yet. */ }
-const arch = process.arch === 'arm64' ? 'arm64' : 'x64', file = `electron-v${version}-linux-${arch}.zip`;
+const file = `electron-v${version}-${target}-${arch}.zip`;
 const expected = JSON.parse(await readFile(resolve(pkg, 'checksums.json'), 'utf8'))[file];
 if (!expected) throw new Error(`${file} is not listed in checksums.json`);
 const url = `https://github.com/electron/electron/releases/download/v${version}/${file}`;
@@ -29,10 +35,12 @@ const temp = resolve(root, '.toolchain', file);
 await mkdir(resolve(root, '.toolchain'), { recursive: true });
 await writeFile(temp, data);
 await rm(dist, { recursive: true, force: true });
-const unzip = spawnSync('python3', ['-m', 'zipfile', '-e', temp, dist], { stdio: 'inherit' });
+await mkdir(dist, { recursive: true });
+const unzip = process.platform === 'win32' ? spawnSync('tar.exe', ['-xf', temp, '-C', dist], { stdio: 'inherit' })
+  : spawnSync('python3', ['-m', 'zipfile', '-e', temp, dist], { stdio: 'inherit' });
 await rm(temp);
 if (unzip.status !== 0) throw new Error('Unpacking Electron failed');
 // python's zipfile drops the executable bit.
-spawnSync('chmod', ['+x', ...['electron', 'chrome_crashpad_handler', 'chrome-sandbox'].map(name => resolve(dist, name))]);
-await writeFile(resolve(pkg, 'path.txt'), 'electron');
-console.log(`Electron ${version} is ready in node_modules/electron/dist. No system settings were changed.`);
+if (target === 'linux') spawnSync('chmod', ['+x', ...['electron', 'chrome_crashpad_handler', 'chrome-sandbox'].map(name => resolve(dist, name))]);
+if (native) await writeFile(resolve(pkg, 'path.txt'), executable);
+console.log(`Electron ${version} is ready in ${dist}.`);

@@ -18,23 +18,23 @@
     "category": "AudioVideo;Audio;Player",
     "executableName": "soundsense",
     "synopsis": "Personal music player",
-    "syncDesktopName": true
+    "syncDesktopName": true,
+    "extraResources": [
+      {
+        "from": ".toolchain/ffmpeg",
+        "to": "ffmpeg",
+        "filter": [
+          "ffmpeg",
+          "LICENSE.md",
+          "COPYING.LGPLv2.1"
+        ]
+      }
+    ]
   },
   "publish": null,
   "toolsets": {
     "appimage": "1.0.3"
   },
-  "extraResources": [
-    {
-      "from": ".toolchain/ffmpeg",
-      "to": "ffmpeg",
-      "filter": [
-        "ffmpeg",
-        "LICENSE.md",
-        "COPYING.LGPLv2.1"
-      ]
-    }
-  ],
   "appImage": {
     "desktop": {
       "entry": {
@@ -46,5 +46,38 @@
         "Comment": "Personal music player"
       }
     }
+  },
+  "win": {
+    "icon": "assets/branding/icons/256x256.png",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      },
+      {
+        "target": "portable",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "extraResources": [
+      {
+        "from": ".toolchain/ffmpeg-win32-x64",
+        "to": "ffmpeg",
+        "filter": [
+          "ffmpeg.exe",
+          "LICENSE.md",
+          "COPYING.LGPLv2.1"
+        ]
+      }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true
   }
 }

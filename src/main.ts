@@ -137,7 +137,7 @@ if (DEBUG_TOOLS && import.meta.env.DEV && new URLSearchParams(location.search).g
   if (desktop) { const bridge = desktop; api.waveCache = { getStats: () => bridge.waves.stats(), clear: () => bridge.waves.clear() }; }
   else if (Capacitor.isNativePlatform()) api.waveCache = { getStats: () => SystemUi.getWaveCache(), clear: () => SystemUi.clearWaveCache() };
   const installed = Capacitor.isNativePlatform() ? await NativeApp.getInfo().then(info => ({ version: info.version, versionCode: Number(info.build) })) : { version: APP_VERSION, versionCode: APP_VERSION_CODE };
-  api.updates = createUpdates({ http, installed, platform: desktop ? 'linux-appimage' : 'android', channel: APP_CHANNEL, installer: createUpdateInstaller(), storage,
+  if (desktop?.platform !== 'win32') api.updates = createUpdates({ http, installed, platform: desktop ? 'linux-appimage' : 'android', channel: APP_CHANNEL, installer: createUpdateInstaller(), storage,
     urls: () => DEFAULT_UPDATE_URLS,
   });
   if (BETA_FEATURES && typeof Worker !== 'undefined') {

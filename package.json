@@ -36,6 +36,8 @@
     "desktop:app:beta": "node scripts/desktop.mjs app beta",
     "desktop:appimage": "node scripts/desktop.mjs appimage stable",
     "desktop:appimage:beta": "node scripts/desktop.mjs appimage beta",
+    "desktop:win": "node scripts/desktop.mjs win stable",
+    "desktop:win:beta": "node scripts/desktop.mjs win beta",
     "desktop:setup": "node scripts/setup-desktop.mjs",
     "release": "node scripts/release/publish.mjs",
     "release:stable": "node scripts/release/publish.mjs --channel=stable",

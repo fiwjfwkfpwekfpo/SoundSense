@@ -13,19 +13,23 @@ import { releaseChannel } from './lib/channels.mjs';
  */
 const root = fileURLToPath(new URL('../', import.meta.url));
 const [command = 'dev', requested = command === 'dev' ? 'beta' : 'stable'] = process.argv.slice(2);
-if (!['dev', 'app', 'appimage'].includes(command)) throw new Error('Usage: node scripts/desktop.mjs dev|app|appimage [stable|beta]');
+if (!['dev', 'app', 'appimage', 'win'].includes(command)) throw new Error('Usage: node scripts/desktop.mjs dev|app|appimage|win [stable|beta]');
 const channel = releaseChannel(requested);
 const manifest = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
 const toolchain = resolve(root, '.toolchain');
-const env = { ...process.env, SS_CHANNEL: channel.name, SS_FFMPEG: resolve(root, '.toolchain/ffmpeg/ffmpeg'), ELECTRON_CACHE: resolve(toolchain, 'electron-cache'), ELECTRON_BUILDER_CACHE: resolve(toolchain, 'electron-builder-cache') };
-const electron = resolve(root, 'node_modules/electron/dist/electron');
+const target = command === 'win' ? 'win32' : command === 'appimage' ? 'linux' : process.platform;
+const windows = target === 'win32';
+const electronDist = target === process.platform && (!windows || process.arch === 'x64') ? resolve(root, 'node_modules/electron/dist') : resolve(toolchain, `electron-${target}-x64`);
+const electron = resolve(electronDist, windows ? 'electron.exe' : 'electron');
+const ffmpeg = resolve(toolchain, windows ? 'ffmpeg-win32-x64/ffmpeg.exe' : 'ffmpeg/ffmpeg');
+const env = { ...process.env, SS_CHANNEL: channel.name, SS_FFMPEG: ffmpeg, ELECTRON_CACHE: resolve(toolchain, 'electron-cache'), ELECTRON_BUILDER_CACHE: resolve(toolchain, 'electron-builder-cache') };
 function run(file, args, options = {}) {
   const result = spawnSync(file, args, { cwd: root, env, stdio: 'inherit', ...options });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
-if (!existsSync(electron)) run(process.execPath, ['scripts/setup-desktop.mjs']);
+if (!existsSync(electron)) run(process.execPath, ['scripts/setup-desktop.mjs', target]);
 // Waveforms need the bundled static ffmpeg (built once into .toolchain/ffmpeg).
-run(process.execPath, ['scripts/build-ffmpeg.mjs']);
+run(process.execPath, ['scripts/build-ffmpeg.mjs', target]);
 
 if (command === 'dev') {
   const url = 'http://127.0.0.1:5173/';
@@ -41,7 +45,7 @@ if (command === 'dev') {
   process.on('SIGINT', stop); process.on('SIGTERM', stop);
   app.on('exit', code => { vite.kill(); process.exit(code ?? 0); });
 } else {
-  const out = resolve(root, 'artifacts/desktop', channel.name), app = resolve(out, 'app');
+  const out = resolve(root, 'artifacts/desktop', channel.name), app = resolve(out, command === 'win' ? 'windows-x64/app' : 'app');
   run(process.execPath, ['scripts/web.mjs', 'build', channel.name]);
   await rm(app, { recursive: true, force: true }); await mkdir(app, { recursive: true });
   run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'config/vite.desktop.config.ts', '--logLevel', 'warn'], { env: { ...env, SS_DESKTOP_OUT: app } });
@@ -52,11 +56,18 @@ if (command === 'dev') {
   await writeFile(resolve(app, 'package.json'), JSON.stringify({ name: 'soundsense', productName: 'SoundSense', version: manifest.version, description: manifest.description, main: 'main.mjs', desktopName: 'soundsense.desktop', author: 'SoundSense', license: 'UNLICENSED' }, null, 2) + '\n');
   if (command === 'app') { if (!process.env.SS_NO_LAUNCH) run(electron, [app]); }
   else {
-    run(process.execPath, ['node_modules/electron-builder/cli.js', '--linux', 'AppImage', '--x64', '--config', 'config/electron-builder.json',
-      `-c.directories.app=${app}`, `-c.directories.output=${out}`, `-c.electronDist=${resolve(root, 'node_modules/electron/dist')}`,
+    const output = command === 'win' ? resolve(out, 'windows-x64') : out;
+    // Builder downloads CommonJS helpers inside this ES-module project.
+    await mkdir(env.ELECTRON_BUILDER_CACHE, { recursive: true });
+    await writeFile(resolve(env.ELECTRON_BUILDER_CACHE, 'package.json'), '{"type":"commonjs"}\n');
+    const format = command === 'win' ? ['--win', 'nsis', 'portable'] : ['--linux', 'AppImage'];
+    run(process.execPath, ['node_modules/electron-builder/cli.js', ...format, '--x64', '--publish', 'never', '--config', 'config/electron-builder.json',
+      `-c.directories.app=${app}`, `-c.directories.output=${output}`, `-c.electronDist=${electronDist}`,
       `-c.electronVersion=${JSON.parse(await readFile(resolve(root, 'node_modules/electron/package.json'), 'utf8')).version}`,
-      `-c.artifactName=SoundSense-\${version}-${channel.name}-\${arch}.\${ext}`]);
-    await rm(resolve(out, 'builder-debug.yml'), { force: true });
-    console.log(`AppImage is in ${out}`);
+      ...(command === 'win' ? [`-c.nsis.artifactName=SoundSense-\${version}-${channel.name}-windows-x64-setup.exe`,
+        `-c.portable.artifactName=SoundSense-\${version}-${channel.name}-windows-x64-portable.exe`]
+        : [`-c.artifactName=SoundSense-\${version}-${channel.name}-\${arch}.\${ext}`])]);
+    await rm(resolve(output, 'builder-debug.yml'), { force: true });
+    console.log(`Desktop packages are in ${output}`);
   }
 }

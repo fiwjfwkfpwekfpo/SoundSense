@@ -16,7 +16,7 @@ export function linkCaches(data, cache, folders = CACHE_FOLDERS) {
     let stat; try { stat = lstatSync(from); } catch { /* Not there yet. */ }
     if (stat?.isSymbolicLink()) { if (readlinkSync(from) === to) continue; rmSync(from); }
     else if (stat) rmSync(from, { recursive: true, force: true }); // A real cache folder from an older version: just a cache.
-    symlinkSync(to, from, 'dir'); linked.push(name);
+    symlinkSync(to, from, process.platform === 'win32' ? 'junction' : 'dir'); linked.push(name);
   }
   return linked;
 }

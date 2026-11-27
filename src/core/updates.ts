@@ -8,7 +8,7 @@ import type { Unsubscribe } from './types';
 
 export const UPDATE_CONTEXT = 'SoundSense/update-manifest/v1\n';
 export const DEFAULT_UPDATE_URLS: readonly string[] = releaseFileUrls(`${APP_CHANNEL}.json`);
-export type UpdatePlatform = 'android' | 'linux-appimage' | 'windows';
+export type UpdatePlatform = 'android' | 'linux-appimage' | 'windows' | 'windows-x64';
 export interface UpdateArtifact { filename: string; size: number; sha256: string; urls: readonly string[] }
 export interface UpdateManifest {
   schema: 1; version: string; versionCode: number; publishedAt: string; channel?: ReleaseChannel;
@@ -48,7 +48,7 @@ export async function verifyUpdate(text: string, publicKey = pinnedKey.publicKey
   const validNotes = (value: UpdateManifest['notes'] | undefined) => !!value && ['ru', 'en'].every(locale => { const notes = value[locale as 'ru' | 'en']; return Array.isArray(notes) && notes.length <= 100 && notes.every(line => typeof line === 'string' && line.length <= 2000); });
   if (!validNotes(manifest.notes) || manifest.desktopNotes !== undefined && !validNotes(manifest.desktopNotes)) throw new UpdateFailure('invalid');
   for (const [platform, artifact] of Object.entries(manifest.artifacts)) {
-    if (!['android', 'linux-appimage', 'windows'].includes(platform) || !artifact || !/^[a-z\d][a-z\d._-]{0,180}$/i.test(artifact.filename) || !Number.isSafeInteger(artifact.size) || artifact.size <= 0 || artifact.size > 512 * 1024 * 1024 || !/^[a-f\d]{64}$/i.test(artifact.sha256) || !Array.isArray(artifact.urls) || !artifact.urls.length || artifact.urls.length > 12 || !artifact.urls.every(https)) throw new UpdateFailure('invalid');
+    if (!['android', 'linux-appimage', 'windows', 'windows-x64'].includes(platform) || !artifact || !/^[a-z\d][a-z\d._-]{0,180}$/i.test(artifact.filename) || !Number.isSafeInteger(artifact.size) || artifact.size <= 0 || artifact.size > 512 * 1024 * 1024 || !/^[a-f\d]{64}$/i.test(artifact.sha256) || !Array.isArray(artifact.urls) || !artifact.urls.length || artifact.urls.length > 12 || !artifact.urls.every(https)) throw new UpdateFailure('invalid');
   }
   if (!Object.keys(manifest.artifacts).length) throw new UpdateFailure('invalid');
   return manifest;

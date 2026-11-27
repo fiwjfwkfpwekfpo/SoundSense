@@ -43,6 +43,11 @@ describe('signed update trust and fallback', () => {
     const stranger = generateKeyPairSync('ed25519').publicKey.export({ type: 'spki', format: 'der' }).subarray(-32).toString('hex');
     await expect(verifyUpdate(signed(), stranger)).rejects.toMatchObject({ code: 'signature' });
   });
+  it('accepts a signed manifest with a future Windows x64 installer', async () => {
+    const value = manifest();
+    value.artifacts['windows-x64'] = { ...value.artifacts.android!, filename: 'SoundSense-setup.exe', urls: ['https://mirror.test/SoundSense-setup.exe'] };
+    expect(await verifyUpdate(signed(value), publicKey)).toEqual(value);
+  });
   it('rejects unsafe artifact URLs even in an authentic manifest', async () => {
     const value = manifest(); value.artifacts.android!.urls = ['http://mirror.test/unsafe.apk'];
     await expect(verifyUpdate(signed(value), publicKey)).rejects.toMatchObject({ code: 'invalid' });

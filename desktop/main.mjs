@@ -36,7 +36,7 @@ app.setPath('userData', join(paths.data, 'chromium'));
 app.setPath('sessionData', join(paths.data, 'chromium'));
 app.setPath('crashDumps', join(paths.cache, 'crashes'));
 app.setAppLogsPath(join(paths.data, 'logs'));
-if (process.platform === 'linux') { try { linkCaches(join(paths.data, 'chromium'), join(paths.cache, 'chromium')); } catch (error) { log('cache folders stay in the data folder', error); } }
+if (process.platform === 'linux' || process.platform === 'win32') { try { linkCaches(join(paths.data, 'chromium'), join(paths.cache, 'chromium')); } catch (error) { log('cache folders stay in the data folder', error); } }
 app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 * 1024));
 // Some CDNs reject unknown clients; the window identifies as plain Chromium.
 app.userAgentFallback = app.userAgentFallback.replace(/\s(SoundSense|soundsense|Electron)\/\S+/g, '');

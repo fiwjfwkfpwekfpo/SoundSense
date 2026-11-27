@@ -53,3 +53,9 @@ Dry run выполняет локальные проверки, сборку и 
 ## Desktop (Linux AppImage)
 
 `npm run release:<channel>` also builds `SoundSense-<version>-<channel>-x86_64.AppImage`, uploads it as an asset of the GitHub Release `v<version>` (over 100 MB, so it cannot live in the `releases` branch; the upload is throttled to 5 MB/s because GitHub cuts fast big uploads) and adds a `linux-appimage` artifact (size, SHA-256, release URL) to the signed manifest. `--skip-desktop` releases only the Android package. The commit must be pushed before a release (the tag points to it).
+
+## Локальная сборка Windows x64
+
+В Windows запустите Node.js x64 и `npm ci`. Для сборки встроенного FFmpeg нужны Bash, Make, tar и MinGW-w64. В консоли MSYS2 UCRT64 их предоставляет команда `pacman -S --needed make tar diffutils mingw-w64-ucrt-x86_64-gcc`. Запустите `npm run desktop:win:beta` или `npm run desktop:win` из корня проекта. В Linux для тех же команд нужны Wine, Make и кросс-компилятор с префиксом `x86_64-w64-mingw32-` в PATH.
+
+В `artifacts/desktop/<канал>/windows-x64/` появятся установщик `*-setup.exe` и автономный файл `*-portable.exe`. Оба включают Electron и статический FFmpeg с лицензией. У portable те же системные папки настроек, данных и кэша, что у установленной программы. Ключ `windows-x64` зарезервирован в схеме обновлений для будущего установщика.
