@@ -21,9 +21,11 @@ export default defineConfig(() => {
       },
     }],
     define: { __APP_CHANNEL__: JSON.stringify(name), __DEBUG_TOOLS__: JSON.stringify(channel.debugTools) },
-    server: { port: 5173, strictPort: true, proxy },
+    server: { port: 5173, strictPort: true, proxy,
+      watch: { ignored: ['**/artifacts/**', '**/.toolchain/**', '**/android/**/build/**', '**/android/.gradle/**'] },
+    },
     worker: { format: 'es' },
-    optimizeDeps: { include: ['music-metadata'] },
+    optimizeDeps: { entries: ['index.html'], include: ['music-metadata'] },
     build: { target: 'es2022', outDir: `dist/${name}` },
     test: { include: ['tests/unit/**/*.test.ts'], environment: 'node' },
   };
