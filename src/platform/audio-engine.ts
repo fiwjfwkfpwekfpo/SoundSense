@@ -10,6 +10,7 @@ import type { DiagnosticsApi } from '../core/diagnostics';
 import { processingRate, processingPitch } from '../core/audio-settings';
 import { debugHooks } from '../core/debug-hooks';
 import { filterClock } from '../core/clock-filter';
+import { connectOutput } from './output-limiter';
 import { loadPitchShifter, playbackPlan } from './pitch-shifter';
 
 interface AudioClock { position: number; playing: boolean; ended: boolean; buffering: boolean; rate?: number }
@@ -25,7 +26,7 @@ interface EngineOptions { diagnostics?: DiagnosticsApi; errorText?: (reason: Pla
 type Resolve = (track: Track, signal?: AbortSignal) => Promise<string | AudioStream>;
 const streamValue = (value: string | AudioStream): AudioStream => typeof value === 'string' ? { uri: value } : value;
 export function createAudioEngine(resolve: Resolve, options: EngineOptions = {}): AudioEngine {
-  return Capacitor.isNativePlatform() ? nativeEngine(resolve, options) : webEngine(resolve);
+  return Capacitor.isNativePlatform() ? nativeEngine(resolve, options) : webEngine(resolve, desktop ? options.diagnostics : undefined);
 }
 function nativeEngine(resolve: Resolve, options: EngineOptions): AudioEngine {
   const generation = { a: 0, b: 0 }, rates = { a: 1, b: 1 }, clock: Record<AudioSlot, AudioClock & { sampledAt: number }> = { a: empty(), b: empty() };
@@ -86,14 +87,23 @@ function nativeEngine(resolve: Resolve, options: EngineOptions): AudioEngine {
     dispose() { disposed = true; if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', visibility); resolving.a?.abort(); resolving.b?.abort(); command('dispose'); for (const subscription of subscriptions) void subscription.then(handle => handle.remove()); listeners.clear(); },
   };
 }
-function webEngine(resolve: Resolve): AudioEngine {
+function webEngine(resolve: Resolve, diagnostics?: DiagnosticsApi): AudioEngine {
   const context = new AudioContext();
-  // source → [pitch shifter] → volume (sound settings, loudness) → gain (fades, crossfade) → out
+  const mix = context.createGain();
+  const output = connectOutput(context, mix, diagnostics);
+  let monitored: AudioSlot | undefined, overlapping: AudioSlot | undefined, outputPort: MessagePort | undefined;
+  void output.then(port => { outputPort = port; });
+  function meter(slot?: AudioSlot, from?: AudioSlot) {
+    monitored = slot; overlapping = from;
+    if (diagnostics) outputPort?.postMessage(slot ? { trackId: slots[slot].trackId, overlapFrom: from ? slots[from].trackId : undefined } : null);
+  }
+  let disposed = false;
+  // Both slots feed the same peak limiter, including the sum during a crossfade.
   const make = () => {
     const media = new Audio(); media.preload = 'auto'; media.crossOrigin = 'anonymous';
     const source = context.createMediaElementSource(media), volume = context.createGain(), gain = context.createGain();
-    source.connect(volume).connect(gain).connect(context.destination); gain.gain.value = 0;
-    return { media, source, volume, gain, shifter: undefined as AudioWorkletNode | undefined, rate: 1, generation: 0, waiting: false, resolving: undefined as AbortController | undefined, hls: undefined as import('hls.js').default | undefined };
+    source.connect(volume).connect(gain).connect(mix); gain.gain.value = 0;
+    return { media, source, volume, gain, shifter: undefined as AudioWorkletNode | undefined, shift: 1, rate: 1, trackId: '', generation: 0, waiting: false, resolving: undefined as AbortController | undefined, hls: undefined as import('hls.js').default | undefined };
   };
   const slots = { a: make(), b: make() };
   const listeners = new Set<(event: AudioEvent) => void>();
@@ -106,16 +116,42 @@ function webEngine(resolve: Resolve): AudioEngine {
     async prepare(slot, track) {
       const target = slots[slot], token = ++target.generation;
       target.resolving?.abort(); const controller = target.resolving = new AbortController();
-      const { uri, headers } = streamValue(await resolve(track, controller.signal));
+      const { uri, headers, provider } = streamValue(await resolve(track, controller.signal));
       if (token !== target.generation) throw new DOMException('Superseded', 'AbortError');
       target.hls?.destroy(); target.hls = undefined; target.media.pause(); target.waiting = true;
       // Desktop: streams that need headers (User-Agent…) go through ss-media://stream, which <audio> can read.
       const url = desktop && /^https:/.test(uri) ? desktopMediaUrl(uri, headers, desktop.cache ? track.id : undefined) : await mediaUrl(uri);
       if (token !== target.generation) throw new DOMException('Superseded', 'AbortError');
-      if (/\.m3u8(?:\?|$)/i.test(url) && !target.media.canPlayType('application/vnd.apple.mpegurl')) {
+      target.trackId = track.id;
+      const hlsStream = /\.m3u8(?:\?|$)/i.test(url);
+      const source = { trackId: track.id, provider: provider ?? 'unknown',
+        delivery: uri.startsWith('ss-media:') ? 'cache' : uri.startsWith('file:') ? 'file' : hlsStream ? 'hls' : 'stream', outputSampleRate: context.sampleRate };
+      if (hlsStream && !target.media.canPlayType('application/vnd.apple.mpegurl')) {
         const { default: Hls } = await import('hls.js'); if (token !== target.generation) throw new DOMException('Superseded', 'AbortError');
         if (!Hls.isSupported()) throw new Error('HLS is not supported');
-        target.hls = new Hls({ maxBufferLength: 12, maxMaxBufferLength: 30, xhrSetup(xhr) { for (const [key, value] of Object.entries(headers ?? {})) if (!/^(user-agent|origin|referer)$/i.test(key)) xhr.setRequestHeader(key, value); } }); target.hls.loadSource(url); target.hls.attachMedia(target.media);
+        target.hls = new Hls({ maxBufferLength: 12, maxMaxBufferLength: 30, xhrSetup(xhr) { for (const [key, value] of Object.entries(headers ?? {})) if (!/^(user-agent|origin|referer)$/i.test(key)) xhr.setRequestHeader(key, value); } });
+        if (diagnostics) {
+          let bitrate: number | null = null, measured = false, audioOnly = true;
+          let format: { codec: string | null; channels: number | null; sampleRate: number | null } | undefined;
+          const report = () => {
+            if (!format || controller.signal.aborted) return;
+            diagnostics.record('audio', 'stream.format', { ...source, ...format, bitrate: audioOnly ? bitrate : null });
+            measured = true;
+          };
+          target.hls.on(Hls.Events.FRAG_LOADED, (_, { frag, payload }) => {
+            if (frag.duration <= 0 || frag.sn === 'initSegment' || measured && bitrate !== null) return;
+            bitrate = Math.round(payload.byteLength * 8 / frag.duration);
+            if (measured) report();
+          });
+          target.hls.on(Hls.Events.BUFFER_CODECS, (_, { audio, video }) => {
+            if (!audio) return;
+            audioOnly = !video;
+            const fallback = { codec: audio.codec ?? null, channels: audio.metadata?.channelCount ?? null, sampleRate: null };
+            const info = audio.initSegment?.length ? import('../debug/stream-format').then(m => m.formatFromBytes(audio.initSegment!, audio.container)).catch(() => fallback) : Promise.resolve(fallback);
+            void info.then(parsed => { format = parsed; report(); });
+          });
+        }
+        target.hls.loadSource(url); target.hls.attachMedia(target.media);
       } else { target.media.src = url; target.media.load(); }
       target.media.defaultPlaybackRate = target.rate; target.media.playbackRate = target.rate;
       await new Promise<void>((ok, fail) => {
@@ -127,27 +163,45 @@ function webEngine(resolve: Resolve): AudioEngine {
       });
       if (token !== target.generation) throw new DOMException('Superseded', 'AbortError');
       target.waiting = false;
+      if (diagnostics && hlsStream && !target.hls) diagnostics.record('audio', 'stream.format.unavailable', { ...source, reason: 'native-hls' });
+      if (diagnostics && !hlsStream) {
+        void import('../debug/stream-format').then(m => m.probeStream(url, target.media.duration, controller.signal))
+          .then(format => { if (!controller.signal.aborted) diagnostics.record('audio', 'stream.format', { ...source, ...format }); })
+          .catch(() => { if (!controller.signal.aborted) diagnostics.record('audio', 'stream.format.unavailable', source); });
+      }
+      await output;
+      if (token !== target.generation) throw new DOMException('Superseded', 'AbortError');
     },
-    start(slot, position) { const target = slots[slot]; void context.resume(); target.media.currentTime = position; void target.media.play().catch(() => { for (const listener of listeners) listener({ type: 'error', slot }); }); },
-    pause(slot) { slots[slot].media.pause(); }, stop(slot) { const target = slots[slot]; target.generation++; target.resolving?.abort(); target.media.pause(); target.hls?.destroy(); target.hls = undefined; target.media.removeAttribute('src'); target.media.load(); },
+    start(slot, position) { const target = slots[slot]; meter(slot); void context.resume(); target.media.currentTime = position; void target.media.play().catch(() => { for (const listener of listeners) listener({ type: 'error', slot }); }); },
+    pause(slot) { slots[slot].media.pause(); if (monitored === slot) meter(); }, stop(slot) { if (monitored === slot) meter(); else if (overlapping === slot) meter(monitored); const target = slots[slot]; target.generation++; target.resolving?.abort(); target.media.pause(); target.hls?.destroy(); target.hls = undefined; target.media.removeAttribute('src'); target.media.load(); },
     seek(slot, position) { const media = slots[slot].media; if (media.readyState >= 1) media.currentTime = position; },
     loop(slot, enabled) { slots[slot].media.loop = enabled; },
     gain(slot, value) { const gain = slots[slot].gain.gain; gain.cancelScheduledValues(context.currentTime); gain.setValueAtTime(Math.max(0, Math.min(1, value)), context.currentTime); },
     fadeOut(slot, seconds) { const gain = slots[slot].gain.gain; gain.cancelScheduledValues(context.currentTime); gain.setValueAtTime(gain.value, context.currentTime); gain.linearRampToValueAtTime(0, context.currentTime + seconds); },
-    crossfade(from, to, seconds, position) { this.start(to, position); const fromCurve = new Float32Array(128), toCurve = new Float32Array(128); for (let index = 0; index < 128; index++) { const gain = equalPower(index / 127); fromCurve[index] = gain.from; toCurve[index] = gain.to; } for (const [slot, curve] of [[from, fromCurve], [to, toCurve]] as const) { const gain = slots[slot].gain.gain; gain.cancelScheduledValues(context.currentTime); gain.setValueCurveAtTime(curve, context.currentTime, seconds); } },
+    crossfade(from, to, seconds, position) { this.start(to, position); meter(to, from); const fromCurve = new Float32Array(128), toCurve = new Float32Array(128); for (let index = 0; index < 128; index++) { const gain = equalPower(index / 127); fromCurve[index] = gain.from; toCurve[index] = gain.to; } for (const [slot, curve] of [[from, fromCurve], [to, toCurve]] as const) { const gain = slots[slot].gain.gain; gain.cancelScheduledValues(context.currentTime); gain.setValueCurveAtTime(curve, context.currentTime, seconds); } },
     clock(slot) { const target = slots[slot], media = target.media; return { position: media.currentTime, playing: !media.paused, ended: media.ended, buffering: target.waiting || media.readyState < 3, rate: media.playbackRate }; },
     processing(slot, values) {
       const target = slots[slot], plan = playbackPlan(processingRate(values), processingPitch(values));
       target.rate = plan.rate; target.media.playbackRate = plan.rate; target.media.preservesPitch = plan.preservesPitch;
       target.volume.gain.setTargetAtTime(Math.max(0, Math.min(4, values.volume)), context.currentTime, .03);
-      if (Math.abs(plan.shift - 1) < 1e-3 && !target.shifter) return;
+      target.shift = plan.shift;
+      if (Math.abs(plan.shift - 1) < 1e-3) {
+        if (target.shifter) {
+          target.source.disconnect(target.shifter); target.shifter.port.postMessage('stop'); target.shifter.disconnect(); target.shifter = undefined;
+          target.source.connect(target.volume);
+        }
+        return;
+      }
       void loadPitchShifter(context).then(ok => {
-        if (!ok) return;
-        if (!target.shifter) { target.shifter = new AudioWorkletNode(context, 'soundsense-pitch', { outputChannelCount: [2] }); target.source.disconnect(); target.source.connect(target.shifter).connect(target.volume); }
-        target.shifter.parameters.get('ratio')!.setValueAtTime(plan.shift, context.currentTime);
+        if (!ok || disposed || Math.abs(target.shift - 1) < 1e-3) return;
+        if (!target.shifter) {
+          target.shifter = new AudioWorkletNode(context, 'soundsense-pitch', { outputChannelCount: [2] });
+          target.source.disconnect(target.volume); target.source.connect(target.shifter).connect(target.volume);
+        }
+        target.shifter.parameters.get('ratio')!.setValueAtTime(target.shift, context.currentTime);
       });
     },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
-    dispose() { for (const slot of ['a', 'b'] as const) { this.stop(slot); slots[slot].gain.disconnect(); } void context.close(); listeners.clear(); },
+    dispose() { disposed = true; for (const slot of ['a', 'b'] as const) { this.stop(slot); slots[slot].gain.disconnect(); } void context.close(); listeners.clear(); },
   };
 }

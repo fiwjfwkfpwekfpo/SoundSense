@@ -50,10 +50,12 @@ describe('desktop music cache', () => {
     const init = bytes(300, 3), one = bytes(5000, 5), two = bytes(7000, 7);
     const playlist = ['#EXTM3U', '#EXT-X-VERSION:7', '#EXT-X-MAP:URI="init.mp4?sig=1"', '#EXTINF:10,', 'seg1.m4s?sig=2', '#EXTINF:8,', 'https://other/seg2.m4s', '#EXT-X-ENDLIST'].join('\n');
     const cache = createMusicCache({ directory, fetch: server({ 'https://cdn/t/list.m3u8?x=1': playlist, 'https://cdn/t/init.mp4?sig=1': init, 'https://cdn/t/seg1.m4s?sig=2': one, 'https://other/seg2.m4s': two }) });
-    await cache.note('h', 'https://cdn/t/list.m3u8?x=1', {});
+    await cache.note('h', 'https://cdn/t/list.m3u8?x=1', {}, 'youtube');
     const chunks: Buffer[] = []; for await (const chunk of (await cache.bytes('h'))!) chunks.push(Buffer.from(chunk)); expect(Buffer.concat(chunks).equals(Buffer.concat([init, one, two]))).toBe(true);
     await cache.idle(); const source = await cache.source('h'); expect(source.uri).toMatch(/^ss-media:\/\/hls\/[a-f0-9]{40}\/index\.m3u8$/);
     const path = new URL(source.uri!).pathname, text = (await read(await cache.serveHls(request(), path))).toString();
+    expect(source.provider).toBe('youtube');
+    expect((await createMusicCache({ directory, fetch: server({}) }).source('h')).provider).toBe('youtube');
     expect(text).toContain('#EXT-X-MAP:URI="p0"'); expect(text.split('\n').filter(line => /^p\d$/.test(line))).toEqual(['p1', 'p2']);
     expect((await read(await cache.serveHls(request(), path.replace('index.m3u8', 'p2')))).equals(two)).toBe(true);
     expect((await cache.serveHls(request(), path.replace('index.m3u8', '../x'))).status).toBe(404);

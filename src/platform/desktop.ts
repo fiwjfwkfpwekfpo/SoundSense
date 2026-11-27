@@ -25,7 +25,7 @@ export interface DesktopBridge {
   clipboard: { read(): Promise<string> };
   waves: {
     read(options: WaveRequest & { uri: string }): Promise<WaveReply>; readStream(options: WaveRequest & { id: string }): Promise<WaveReply>;
-    register(id: string, uri: string, headers?: Readonly<Record<string, string>>): Promise<void>; cancel(key: string): Promise<void>;
+    register(id: string, uri: string, headers?: Readonly<Record<string, string>>, provider?: string): Promise<void>; cancel(key: string): Promise<void>;
     stats(): Promise<{ bytes: number; count: number; limit: number }>; clear(): Promise<void>; setLimit(bytes: number): Promise<void>;
     onProgress(listener: (value: { uri: string; samples: readonly number[]; progress: number; status: 'building' | 'ready' | 'deferred' }) => void): () => void;
   };
@@ -33,7 +33,7 @@ export interface DesktopBridge {
   cache?: {
     snapshot(): Promise<OfflineState>; configure(options: { automatic: boolean; wifiOnly: boolean; limitMb: number }): Promise<void>;
     download(options: { id: string; uri: string; headers?: Readonly<Record<string, string>> }): Promise<void>; remove(options: { id: string }): Promise<void>; clear(): Promise<void>;
-    setPreferred(ids: readonly string[]): Promise<void>; source(id: string): Promise<{ available: boolean; uri?: string }>;
+    setPreferred(ids: readonly string[]): Promise<void>; source(id: string): Promise<{ available: boolean; uri?: string; provider?: string }>;
     onChange(listener: (value: OfflineState) => void): () => void;
   };
   /** Self-update of the AppImage (desktop/updater.mjs). `available` is false outside an AppImage. */

@@ -8,8 +8,9 @@
 const WORKLET = `
 class PitchShifter extends AudioWorkletProcessor {
   static get parameterDescriptors() { return [{ name: 'ratio', defaultValue: 1, minValue: 0.25, maxValue: 4, automationRate: 'k-rate' }]; }
-  constructor() { super(); this.size = Math.round(sampleRate * 0.06); this.buffers = []; this.write = 0; this.phase = 0; }
+  constructor() { super(); this.size = Math.round(sampleRate * 0.06); this.buffers = []; this.write = 0; this.phase = 0; this.stopped = false; this.port.onmessage = ({data}) => { if (data === 'stop') this.stopped = true; }; }
   process(inputs, outputs, parameters) {
+    if (this.stopped) return false;
     const input = inputs[0], output = outputs[0], ratio = parameters.ratio[0];
     if (!input || !input.length) return true;
     while (this.buffers.length < input.length) this.buffers.push(new Float32Array(this.size));

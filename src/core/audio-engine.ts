@@ -8,7 +8,7 @@ export function playbackFailureReason(error: unknown): PlaybackFailureReason {
   return value.kind === 'auth' || value.kind === 'expired' ? 'auth' : value.kind === 'region' || status === 451 ? 'region' : status === 401 || status === 403 ? 'auth' : value.kind === 'not_found' || status === 404 ? 'unavailable' : /timed?\s*out|timeout/i.test(message) ? 'timeout' : /drm|widevine|fairplay/i.test(message) ? 'protected' : /network|fetch|connection|http/i.test(message) ? 'network' : /content:|file|permission/i.test(message) ? 'file' : 'decoder';
 }
 export type AudioSlot = 'a' | 'b';
-export interface AudioStream { uri: string; headers?: Readonly<Record<string, string>> }
+export interface AudioStream { uri: string; provider?: string; headers?: Readonly<Record<string, string>> }
 export interface AudioEvent {
   type: 'error' | 'pause' | 'play' | 'next' | 'previous' | 'like' | 'seek' | 'advanced' | 'ended'; slot?: AudioSlot; liked?: boolean; position?: number; reason?: PlaybackFailureReason; message?: string; code?: string; status?: number;
   /** "advanced": the engine switched from `slot` to `to` on its own (armed hand-off). */

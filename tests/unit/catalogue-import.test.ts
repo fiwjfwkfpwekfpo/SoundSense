@@ -81,6 +81,8 @@ it('searches the actual Apple catalogue and uses full audio-only YouTube renditi
   expect((await service.search!('Song')).tracks[0]?.sources[0]?.kind).toBe('apple');
   const master = '#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="1",URI="https://manifest.googlevideo.com/itag/234/audio.m3u8"';
   expect(youtubeAudioRendition(master, 'https://manifest.googlevideo.com/master')).toContain('/itag/234/');
+  const lowFirst = master.replace('/234/', '/233/') + '\n' + master.split('\n')[1];
+  expect(youtubeAudioRendition(lowFirst, 'https://manifest.googlevideo.com/master')).toContain('/itag/234/');
   expect(() => youtubeAudioRendition(master.replace('manifest.googlevideo.com/itag', 'evil.test/itag'), 'https://manifest.googlevideo.com/master')).toThrow('Invalid YouTube');
   expect(youtubeTrack({ id: 'abcdefghijk', title: 'Song', author: { name: 'Artist - Topic' }, duration: { seconds: 180 } }, true)).toMatchObject({ id: 'ytm-abcdefghijk', artist: { name: 'Artist' }, duration: 180 });
 });

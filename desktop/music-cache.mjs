@@ -15,7 +15,7 @@ import { Readable } from 'node:stream';
  * liked tracks last. Everything lives in <cache>/tracks and may be deleted at any time.
  */
 const MAX_BYTES = 512 * 1024 * 1024, NEAR = 512 * 1024, MAX_PARTS = 4000, KEEP_IDLE = 2, EXPLICIT = 2;
-const HLS = /\.m3u8(?:\?|$)/i, CORS = { 'Access-Control-Allow-Origin': '*' };
+const HLS = /\.m3u8(?:\?|$)/i, CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Expose-Headers': 'Content-Range' };
 const clean = headers => { const sent = {}; for (const [key, value] of Object.entries(headers ?? {})) if (typeof value === 'string' && /^[A-Za-z0-9-]{1,64}$/.test(key) && !/^(host|cookie|content-length|range)$/i.test(key)) sent[key] = value; return sent; };
 
 export function createMusicCache({ directory, fetch, onChange = _snapshot => {} }) {
@@ -56,9 +56,9 @@ export function createMusicCache({ directory, fetch, onChange = _snapshot => {} 
     catch { await drop(entry); changed(); return null; }
   }
 
-  function begin(id, url, headers, wanted) {
+  function begin(id, url, headers, wanted, provider) {
     const base = join(directory, name(id)), controller = new AbortController(), waiters = new Set();
-    const job = { id, kind: HLS.test(url) ? 'hls' : 'file', received: 0, total: 0, type: '', state: 'loading', readers: 0, explicit: wanted, controller, started: Date.now(), parts: [], count: 0, path: `${base}.part`,
+    const job = { id, provider, kind: HLS.test(url) ? 'hls' : 'file', received: 0, total: 0, type: '', state: 'loading', readers: 0, explicit: wanted, controller, started: Date.now(), parts: [], count: 0, path: `${base}.part`,
       progress: () => job.kind === 'hls' ? (job.count ? job.parts.length / job.count : 0) : job.total ? job.received / job.total : 0,
       wait: () => new Promise(resolve => waiters.add(resolve)) };
     const wake = () => { for (const resolve of waiters) resolve(); waiters.clear(); };
@@ -80,7 +80,7 @@ export function createMusicCache({ directory, fetch, onChange = _snapshot => {} 
           finally { await handle.close(); }
           if (job.received !== size) throw new Error('Incomplete download');
           await rename(job.path, `${base}.bin`); job.path = `${base}.bin`;
-          await commit({ id, name: name(id), kind: 'file', type: job.type, size, at: Date.now() });
+          await commit({ id, provider: job.provider, name: name(id), kind: 'file', type: job.type, size, at: Date.now() });
         })();
       } else {
         const reply = await get(url); if (!reply.ok) throw new Error(`HTTP ${reply.status}`);
@@ -105,7 +105,7 @@ export function createMusicCache({ directory, fetch, onChange = _snapshot => {} 
           }
           await writeFile(join(job.path, 'index.m3u8'), out.join('\n'));
           await rm(`${base}.hls`, { recursive: true, force: true }); await rename(job.path, `${base}.hls`); job.path = `${base}.hls`;
-          await commit({ id, name: name(id), kind: 'hls', type: 'application/vnd.apple.mpegurl', size: job.received, parts: files.length, at: Date.now() });
+          await commit({ id, provider: job.provider, name: name(id), kind: 'hls', type: 'application/vnd.apple.mpegurl', size: job.received, parts: files.length, at: Date.now() });
         })();
       }
       job.done.then(() => settle('complete'), async () => { await rm(`${base}.part`, { recursive: true, force: true }).catch(() => {}); settle('failed'); });
@@ -118,7 +118,7 @@ export function createMusicCache({ directory, fetch, onChange = _snapshot => {} 
     while (explicit < EXPLICIT && queue.length) {
       const item = queue.shift(); if (entries.has(item.id)) continue;
       const running = jobs.get(item.id); if (running) { running.explicit = true; continue; }
-      explicit++; const job = begin(item.id, item.uri, item.headers, true);
+      explicit++; const job = begin(item.id, item.uri, item.headers, true, item.provider);
       const done = () => { explicit--; pump(); };
       job.head.then(() => job.done.then(done, done), done);
     }
@@ -175,11 +175,17 @@ export function createMusicCache({ directory, fetch, onChange = _snapshot => {} 
     snapshot: async () => { await load(); return snapshot(); },
     async configure(options) { await load(); automatic = options?.automatic !== false; limit = Math.max(128 * 1024 * 1024, (Number(options?.limitMb) || 4096) * 1024 * 1024); await trim(); changed(); },
     setPreferred(ids) { preferred = new Set(Array.isArray(ids) ? ids.map(String) : []); },
-    /** Where a complete track plays from, for the window. */
-    async source(id) { const entry = await ready(String(id)); if (!entry) return { available: false }; touch(entry); return { available: true, uri: entry.kind === 'hls' ? `ss-media://hls/${entry.name}/index.m3u8` : `ss-media://cache/?id=${encodeURIComponent(entry.id)}` }; },
+    /** Where a complete track plays from, for the window.
+     * @returns {Promise<{available: boolean, uri?: string, provider?: string}>} */
+    async source(id) { const entry = await ready(String(id)); if (!entry) return { available: false }; touch(entry); return { available: true, ...(entry.provider ? { provider: entry.provider } : {}), uri: entry.kind === 'hls' ? `ss-media://hls/${entry.name}/index.m3u8` : `ss-media://cache/?id=${encodeURIComponent(entry.id)}` }; },
     /** The player is about to play or preload this address: copy it in the background. */
-    async note(id, uri, headers) { await load(); id = String(id); if (!automatic || !/^https:/.test(String(uri)) || entries.has(id) || jobs.has(id)) return; begin(id, String(uri), headers, false); },
-    async download({ id, uri, headers }) { await load(); id = String(id); if (!/^https:/.test(String(uri))) throw new Error('HTTPS is required'); if (entries.has(id)) return; const job = jobs.get(id); if (job) job.explicit = true; else if (!queue.some(item => item.id === id)) queue.push({ id, uri: String(uri), headers }); changed(); pump(); },
+    async note(id, uri, headers, provider) {
+      await load(); id = String(id);
+      const job = jobs.get(id);
+      if (job) { job.provider ??= provider; return; }
+      if (automatic && /^https:/.test(String(uri)) && !entries.has(id)) begin(id, String(uri), headers, false, provider);
+    },
+    async download({ id, uri, headers, provider = undefined }) { await load(); id = String(id); if (!/^https:/.test(String(uri))) throw new Error('HTTPS is required'); if (entries.has(id)) return; const job = jobs.get(id); if (job) job.explicit = true; else if (!queue.some(item => item.id === id)) queue.push({ id, uri: String(uri), headers, provider }); changed(); pump(); },
     async remove({ id }) { await load(); id = String(id); const at = queue.findIndex(item => item.id === id); if (at >= 0) queue.splice(at, 1); jobs.get(id)?.controller.abort(); const entry = entries.get(id); if (entry) await drop(entry); changed(); },
     async clear() { await load(); queue.length = 0; for (const job of jobs.values()) job.controller.abort(); for (const entry of [...entries.values()]) await drop(entry); changed(); },
     /** ss-media://stream with a track id: from disk when complete, else through the shared download. */

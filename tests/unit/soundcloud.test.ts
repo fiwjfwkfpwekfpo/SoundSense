@@ -23,6 +23,12 @@ describe('full SoundCloud playback', () => {
     expect(await sc.stream(soundCloudTrack(original)!)).toBe('https://audio.test/1.m3u8');
     expect(requests.find(url => url.pathname === '/media/1')?.searchParams.get('track_authorization')).toBe('public-track-authorization');
   });
+  it('prefers the higher advertised audio bitrate even when it appears second', async () => {
+    const original = recording(1), first = original.media.transcodings[0]!;
+    original.media.transcodings.push({ ...first, url: 'https://api-v2.soundcloud.com/media/2', preset: 'aac_256k' });
+    const { sc } = fixture(original);
+    expect(await sc.stream(soundCloudTrack(original)!)).toBe('https://audio.test/2.m3u8');
+  });
   it('uses a full alternative only when title, artists and duration match', async () => {
     const original = recording(1, { protocol: 'ctr-encrypted-hls' }), { sc } = fixture(original, [recording(2, { artist: 'whyspurky + k1n1ch' })]);
     expect(await sc.stream(soundCloudTrack(original)!)).toBe('https://audio.test/2.m3u8');

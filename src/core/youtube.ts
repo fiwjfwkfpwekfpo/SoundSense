@@ -35,8 +35,13 @@ export function youtubeTrack(value: unknown, music = false): Track | null {
 /** Select a complete audio rendition. Previews and DRM cipher material are
  * never interpreted as ordinary audio files. */
 export function youtubeAudioRendition(master: string, origin: string): string {
-  for (const line of master.split(/\r?\n/)) if (/^#EXT-X-MEDIA:.*TYPE=AUDIO/.test(line)) { const uri = /\bURI="([^"]+)"/.exec(line)?.[1]; if (uri && /\/itag\/(?:234|233)\//.test(uri)) return mediaUrl(new URL(uri, origin).href); }
-  for (const line of master.split(/\r?\n/)) if (/^#EXT-X-MEDIA:.*TYPE=AUDIO/.test(line)) { const uri = /\bURI="([^"]+)"/.exec(line)?.[1]; if (uri) return mediaUrl(new URL(uri, origin).href); }
+  const audio = master.split(/\r?\n/).filter(line => /^#EXT-X-MEDIA:.*TYPE=AUDIO/.test(line) && /\bURI="/.test(line));
+  const preferred = audio.find(line => /\bDEFAULT=YES/.test(line)) ?? audio[0];
+  const language = (line: string) => /\bLANGUAGE="([^"]+)"/.exec(line)?.[1];
+  const renditions = preferred ? audio.filter(line => language(line) === language(preferred)) : [];
+  const urls = renditions.map(line => /\bURI="([^"]+)"/.exec(line)![1]!);
+  const best = urls.find(uri => /\/itag\/234\//.test(uri)) ?? urls.find(uri => /\/itag\/233\//.test(uri)) ?? urls[0];
+  if (best) return mediaUrl(new URL(best, origin).href);
   throw new PlaybackFailure('unavailable', 'No full YouTube audio rendition');
 }
 
@@ -100,10 +105,13 @@ export function createYouTube(http: HttpClient) {
     const response = JSON.parse(await http.text('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', signal, {
       method: 'POST', headers: { 'User-Agent': USER_AGENT, 'Content-Type': 'application/json', 'X-Youtube-Client-Name': '101', 'X-Youtube-Client-Version': '1.02', Origin: 'https://www.youtube.com', ...(visitor.value ? { 'X-Goog-Visitor-Id': visitor.value } : {}) },
       body: JSON.stringify({ context: { client: { clientName: 'VISIONOS', clientVersion: '1.02', deviceMake: 'Apple', deviceModel: 'RealityDevice17,1', userAgent: USER_AGENT, osName: 'visionOS', osVersion: '26.5.23O471', hl: 'en', timeZone: 'UTC', utcOffsetMinutes: 0, visitorData: visitor.value || undefined } }, videoId: source.externalId, contentCheckOk: true, racyCheckOk: true }),
-    })) as { streamingData?: { hlsManifestUrl?: string; adaptiveFormats?: readonly { url?: string; mimeType?: string; drmFamilies?: unknown; signatureCipher?: string; cipher?: string }[] }; playabilityStatus?: { status?: string } };
+    })) as { streamingData?: { hlsManifestUrl?: string; adaptiveFormats?: readonly { url?: string; mimeType?: string; bitrate?: number; averageBitrate?: number; audioTrack?: { id?: string; audioIsDefault?: boolean }; drmFamilies?: unknown; signatureCipher?: string; cipher?: string }[] }; playabilityStatus?: { status?: string } };
     const master = response.streamingData?.hlsManifestUrl;
     if (master) { const origin = mediaUrl(master), manifest = await http.text(origin, signal, { headers: { 'User-Agent': USER_AGENT } }); return { uri: youtubeAudioRendition(manifest, origin), headers: { 'User-Agent': USER_AGENT }, source }; }
-    const direct = response.streamingData?.adaptiveFormats?.find(format => format.url && /^audio\//.test(format.mimeType ?? '') && !format.drmFamilies && !format.cipher && !format.signatureCipher);
+    const playable = response.streamingData?.adaptiveFormats?.filter(format => format.url && /^audio\//.test(format.mimeType ?? '') && !format.drmFamilies && !format.cipher && !format.signatureCipher) ?? [];
+    const language = (playable.find(format => format.audioTrack?.audioIsDefault) ?? playable[0])?.audioTrack?.id;
+    const direct = playable.filter(format => format.audioTrack?.id === language)
+      .sort((a, b) => (b.averageBitrate ?? b.bitrate ?? 0) - (a.averageBitrate ?? a.bitrate ?? 0))[0];
     if (direct?.url) return { uri: mediaUrl(direct.url), headers: { 'User-Agent': USER_AGENT }, source };
     throw new PlaybackFailure(response.playabilityStatus?.status === 'LOGIN_REQUIRED' ? 'auth' : 'unavailable', 'YouTube did not provide a full public audio stream');
   }

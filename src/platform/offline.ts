@@ -14,8 +14,8 @@ export function createOfflinePort(): OfflinePort | undefined {
   return { getSnapshot: () => cache.getSnapshot(), configure: value => cache.configure(value), download: value => cache.download(value), remove: value => cache.remove(value), clear: () => cache.clear(), setPreferred: value => cache.setPreferred(value),
     subscribe(listener) { const handle = cache.addListener('change', listener); return () => { void handle.then(value => value.remove()); }; } };
 }
-export async function offlineSource(id: string): Promise<string | undefined> {
-  if (desktop?.cache) { const found = await desktop.cache.source(id).catch(() => undefined); return found?.available ? found.uri : undefined; }
+export async function offlineSource(id: string): Promise<import('../core/audio-engine').AudioStream | string | undefined> {
+  if (desktop?.cache) { const found = await desktop.cache.source(id).catch(() => undefined); return found?.available && found.uri ? { uri: found.uri, provider: found.provider } : undefined; }
   if (!Capacitor.isNativePlatform()) return;
   return (await cache.source({ id })).available ? `soundsense-cache://${id}` : undefined;
 }

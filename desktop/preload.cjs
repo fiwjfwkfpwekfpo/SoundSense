@@ -18,7 +18,7 @@ contextBridge.exposeInMainWorld('soundsenseDesktop', {
   clipboard: { read: () => call('clipboard:read') },
   waves: {
     read: options => call('waves:read', options), readStream: options => call('waves:readStream', options),
-    register: (id, uri, headers) => call('waves:register', id, uri, headers), cancel: key => call('waves:cancel', key),
+    register: (id, uri, headers, provider) => call('waves:register', id, uri, headers, provider), cancel: key => call('waves:cancel', key),
     stats: () => call('waves:stats'), clear: () => call('waves:clear'), setLimit: bytes => call('waves:limit', bytes),
     onProgress(listener) { const handler = (_event, value) => listener(value); ipcRenderer.on('waves:progress', handler); return () => ipcRenderer.removeListener('waves:progress', handler); },
   },

@@ -12,6 +12,7 @@ import { errorDetails } from './diagnostics';
 import { samePlaybackRecording } from './matching';
 
 interface Transcoding { url: string; preset: string; snipped?: boolean; duration?: number; format?: { protocol?: string; mime_type?: string } }
+const nominalBitrate = (format: Transcoding) => Number(/(?:^|_)(\d{2,3})k(?:_|$)/i.exec(format.preset)?.[1] ?? 0);
 interface SoundCloudTrack { id: number; kind?: string; title?: string; duration?: number; full_duration?: number; permalink_url?: string; artwork_url?: string; waveform_url?: string;
   user?: { id?: number; username?: string; avatar_url?: string }; publisher_metadata?: { artist?: string; explicit?: boolean }; policy?: string; track_authorization?: string; media?: { transcodings?: readonly Transcoding[] } }
 interface SoundCloudSet { id: number; kind: string; title?: string; username?: string; likes_count?: number; public_favorites_count?: number; track_count?: number; permalink_url?: string; tracks?: readonly SoundCloudTrack[] }
@@ -60,7 +61,7 @@ export function createSoundCloud(http: HttpClient, storage?: Pick<Storage, 'getI
     if (data.policy === 'BLOCK') throw new PlaybackFailure('region', 'SoundCloud playback is restricted');
     const transcodings = data.media?.transcodings ?? [];
     const formats = transcodings.filter(format => !format.snipped && !format.preset.startsWith('abr') && ['hls', 'progressive'].includes(format.format?.protocol ?? '') && (!format.duration || Math.abs(format.duration / 1000 - track.duration) < 4))
-      .sort((a,b) => Number(b.preset.includes('aac_160')) - Number(a.preset.includes('aac_160')));
+      .sort((a, b) => nominalBitrate(b) - nominalBitrate(a));
     diagnostics?.record('soundcloud', 'stream.variants', { trackId: track.id, title: track.title, variants: transcodings.map(item => `${item.preset}:${item.format?.protocol}:${item.snipped ? 'preview' : 'full'}`).join(', '), usable: formats.length });
     if (!formats.length && transcodings.some(format => /encrypted/.test(format.format?.protocol ?? ''))) throw new PlaybackFailure('protected', 'SoundCloud provides only licensed DRM streams');
     let last: unknown;

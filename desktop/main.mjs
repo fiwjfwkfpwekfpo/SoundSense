@@ -120,7 +120,7 @@ function registerIpc() {
   ipcMain.on('app:hostname', event => { event.returnValue = trusted(event.senderFrame) ? hostname().slice(0, 40) : ''; });
   handle('waves:read', options => waves.readWaveform(options ?? {}));
   handle('waves:readStream', options => waves.readStreamWaveform(options ?? {}));
-  handle('waves:register', (id, uri, headers) => { waves.registerStream(id, uri, headers); void music.note(id, uri, headers).catch(() => {}); });
+  handle('waves:register', (id, uri, headers, provider) => { waves.registerStream(id, uri, headers); void music.note(id, uri, headers, provider).catch(() => {}); });
   handle('cache:snapshot', () => music.snapshot());
   handle('cache:configure', options => music.configure(options ?? {}));
   handle('cache:download', options => music.download(options ?? {}));
