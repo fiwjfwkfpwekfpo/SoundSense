@@ -23,5 +23,39 @@
       "Added word-by-word lyrics highlighting.",
       "Added live covers from Yandex Music."
     ]
+  },
+  "unreleased": {
+    "android": {
+      "ru": [
+        "Оптимизировано переключение треков и строк текста.",
+        "Исправлено перетаскивание треков в очереди.",
+        "Обновлено правило выбора качества потока.",
+        "Исправлено приглушение после кроссфейда."
+      ],
+      "en": [
+        "Optimized track and lyrics transitions.",
+        "Fixed dragging tracks in the queue.",
+        "Improved stream quality selection.",
+        "Fixed low volume after an interrupted crossfade."
+      ]
+    },
+    "desktop": {
+      "ru": [
+        "Оптимизировано переключение треков и строк текста.",
+        "Исправлено перетаскивание треков в очереди.",
+        "Обновлено правило выбора качества потока.",
+        "Добавлено приложение для Windows x64.",
+        "Добавлено ограничение пиков громкости.",
+        "Добавлено измерение параметров звука."
+      ],
+      "en": [
+        "Optimized track and lyrics transitions.",
+        "Fixed dragging tracks in the queue.",
+        "Improved stream quality selection.",
+        "Added Windows x64 packages.",
+        "Added output peak limiting.",
+        "Added audio quality diagnostics."
+      ]
+    }
   }
 }
