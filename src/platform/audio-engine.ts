@@ -126,10 +126,13 @@ function webEngine(resolve: Resolve, diagnostics?: DiagnosticsApi): AudioEngine 
       const hlsStream = /\.m3u8(?:\?|$)/i.test(url);
       const source = { trackId: track.id, provider: provider ?? 'unknown',
         delivery: uri.startsWith('ss-media:') ? 'cache' : uri.startsWith('file:') ? 'file' : hlsStream ? 'hls' : 'stream', outputSampleRate: context.sampleRate };
-      if (hlsStream && !target.media.canPlayType('application/vnd.apple.mpegurl')) {
-        const { default: Hls } = await import('hls.js'); if (token !== target.generation) throw new DOMException('Superseded', 'AbortError');
-        if (!Hls.isSupported()) throw new Error('HLS is not supported');
-        target.hls = new Hls({ maxBufferLength: 12, maxMaxBufferLength: 30, xhrSetup(xhr) { for (const [key, value] of Object.entries(headers ?? {})) if (!/^(user-agent|origin|referer)$/i.test(key)) xhr.setRequestHeader(key, value); } });
+      const nativeHls = hlsStream && !!target.media.canPlayType('application/vnd.apple.mpegurl');
+      // Chromium can report native HLS support while hiding the selected audio format.
+      // MediaSource exposes the actual fragments and honours provider request headers.
+      const Hls = hlsStream && (desktop || !nativeHls) ? (await import('hls.js')).default : undefined;
+      if (token !== target.generation) throw new DOMException('Superseded', 'AbortError');
+      if (Hls?.isSupported()) {
+        const player = target.hls = new Hls({ maxBufferLength: 12, maxMaxBufferLength: 30, xhrSetup(xhr) { for (const [key, value] of Object.entries(headers ?? {})) if (!/^(user-agent|origin|referer)$/i.test(key)) xhr.setRequestHeader(key, value); } });
         if (diagnostics) {
           let bitrate: number | null = null, measured = false, audioOnly = true;
           let format: { codec: string | null; channels: number | null; sampleRate: number | null } | undefined;
@@ -151,8 +154,15 @@ function webEngine(resolve: Resolve, diagnostics?: DiagnosticsApi): AudioEngine 
             void info.then(parsed => { format = parsed; report(); });
           });
         }
-        target.hls.loadSource(url); target.hls.attachMedia(target.media);
-      } else { target.media.src = url; target.media.load(); }
+        if (nativeHls) player.on(Hls.Events.ERROR, (_, error) => {
+          if (!error.fatal || controller.signal.aborted || target.hls !== player || target.media.readyState >= 1) return;
+          player.destroy(); target.hls = undefined; target.media.src = url; target.media.load();
+        });
+        player.loadSource(url); player.attachMedia(target.media);
+      } else {
+        if (hlsStream && !nativeHls) throw new Error('HLS is not supported');
+        target.media.src = url; target.media.load();
+      }
       target.media.defaultPlaybackRate = target.rate; target.media.playbackRate = target.rate;
       await new Promise<void>((ok, fail) => {
         const timeout = setTimeout(() => finish(new Error('Audio load timeout')), 25000);
