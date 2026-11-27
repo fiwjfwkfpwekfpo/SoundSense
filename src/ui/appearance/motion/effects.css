@@ -5,8 +5,8 @@
 .motion-content { display: inherit; flex-direction: inherit; width: 100%; }
 .motion-fill { position: absolute; inset: 0; display: block; overflow: hidden; pointer-events: none; color: var(--color-text); transform-origin: left; }
 .motion-fill-content { display: block; width: 100%; transform-origin: left; }
-:root[data-motion-lyrics='fill'] [data-motion-group='lyrics'] { position: relative; }
-:root[data-motion-lyrics='fill'] [data-motion-group='lyrics'].active { color: var(--color-text-muted); }
+[data-motion-lyrics='scale'], [data-motion-lyrics='blur'] { --lyrics-rise: calc(-.5 * var(--space-1)); --lyrics-scale: 1.025; }
+[data-motion-lyrics='blur'] { --lyrics-near-blur: calc(.5 * var(--blur-art)); }
 :root[data-motion-general='none'] button:active:not(:disabled),
 :root[data-motion-general='fade'] button:active:not(:disabled) { transform: none; }
 :root[data-motion-general='slide'] button:active:not(:disabled) { transform: translateY(var(--space-1)); }

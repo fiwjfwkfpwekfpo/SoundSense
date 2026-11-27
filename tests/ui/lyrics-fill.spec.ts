@@ -24,3 +24,34 @@ test('choice lists open as a centred dialog', async ({ page }) => {
   const box = (await dialog.boundingBox())!, viewport = page.viewportSize()!;
   expect(Math.abs(box.y + box.height / 2 - viewport.height / 2)).toBeLessThan(viewport.height * .2);
 });
+
+test('a late word-timed version keeps the same verse and its visible position', async ({ page }) => {
+  await ready(page);
+  await page.evaluate(async () => {
+    const module = '/src/mock/lyrics.ts';
+    const { mockLyrics } = await import(module);
+    const lines = Array.from({ length: 24 }, (_, i) => ({ time: i * 4, text: 'Verse ' + i }));
+    const first = { trackId: 'track-1', language: 'en', creditKey: 'lyrics.original', lines };
+    let calls = 0;
+    mockLyrics.getLyrics = () => ++calls === 1 ? Promise.resolve(first) : new Promise(resolve => {
+      window.addEventListener('test:upgrade', () => resolve({ ...first, words: true, lines: [
+        { time: 0, text: 'Intro' }, ...lines.map(line => ({ ...line, time: line.time + .2, words: [{ time: line.time + .2, text: line.text }] })),
+      ] }), { once: true });
+    });
+  });
+  await openPlayer(page);
+  await page.getByTestId('player').getByRole('button', { name: 'Текст песни', exact: true }).click();
+  const verse = page.getByRole('button', { name: 'Verse 14', exact: true });
+  await verse.click();
+  await expect(verse).toHaveAttribute('aria-current', 'true');
+  const y = () => verse.evaluate(element => element.getBoundingClientRect().top);
+  await verse.evaluate(element => Promise.all(element.closest('.lyrics-scroll')!.getAnimations({ subtree: true })
+    .filter(animation => animation.playState === 'running').map(animation => animation.finished)));
+  const before = await y();
+  await page.evaluate(() => dispatchEvent(new Event('test:upgrade')));
+  await expect(verse).toHaveAttribute('data-line', '15');
+  await expect(verse).toHaveAttribute('aria-current', 'true');
+  expect(Math.abs((await y()) - before)).toBeLessThan(2);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(verse.locator('.word')).toHaveCount(0);
+});

@@ -4,7 +4,7 @@
   import { tick, untrack } from 'svelte';
   import { useModel } from '../context.svelte';
   import { debugHooks } from '../../core/debug-hooks';
-  import { motion, motionTransition } from '../appearance/motion/runtime';
+  import { followLyricsScroll, lyricsMotion, motionTransition } from '../appearance/motion/runtime';
   import type { Lyrics, LyricsLine } from '../../core/types';
   import EmptyState from '../components/EmptyState.svelte';
   import Icon from '../icons/Icon.svelte';
@@ -20,19 +20,26 @@
   $effect(() => {
     void retry;
     const controller = new AbortController(); lyrics = null; loading = !!trackId; failed = false;
-    if (trackId) void ui.api.lyrics.getLyrics(trackId, controller.signal)
-      .then(value => { if (!controller.signal.aborted) lyrics = value; })
+    const id = trackId;
+    const unsubscribe = ui.api.lyrics.onUpdate?.((updatedId, value) => {
+      if (id === updatedId && !controller.signal.aborted) replaceLyrics(value);
+    });
+    if (id) void ui.api.lyrics.getLyrics(id, controller.signal)
+      .then(value => { if (!controller.signal.aborted && !lyrics) lyrics = value; })
       .catch(() => { if (!controller.signal.aborted) failed = true; })
       .finally(() => { if (!controller.signal.aborted) loading = false; });
-    return () => controller.abort();
+    return () => { controller.abort(); unsubscribe?.(); };
   });
-  // A word-timed text that arrives after the line-timed one replaces it in place.
-  $effect(() => ui.api.lyrics.onUpdate?.((id, value) => { if (id === trackId && !loading) lyrics = value; }));
-  // Smooth lyrics. The active line is a run of words; a soft highlight edge sweeps
-  // through each word in turn (a background-clip gradient moved by the Web Animations
-  // API on the compositor clock). JavaScript only aligns the animations with the audio
-  // clock on seeks, pause/resume and rate changes, never per frame.
-  let smooth = $derived(ui.settings.values.lyricsSmooth !== false);
+  let motionEnabled = $state(false);
+  $effect(() => {
+    const root = linesElement;
+    if (!root) return;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+    const refresh = () => { motionEnabled = lyricsMotion(root).duration > 0; };
+    refresh(); window.addEventListener('app:appearance', refresh); reduce.addEventListener('change', refresh);
+    return () => { window.removeEventListener('app:appearance', refresh); reduce.removeEventListener('change', refresh); };
+  });
+  let smooth = $derived(ui.settings.values.lyricsSmooth !== false && motionEnabled);
   const live = () => ui.api.player.livePosition?.() ?? { position: ui.position, rate: 1, playing: ui.clock.playing };
   /** Words with their trailing space (the sweep runs through it) and their share of the line by letters. */
   function words(text: string) {
@@ -57,15 +64,35 @@
     return found;
   }
   let active = $state(-1);
+  let anchor: { value: Lyrics; index: number; offset: number } | undefined;
+  let held: { index: number; position: number } | undefined;
+  function replaceLyrics(value: Lyrics) {
+    const previous = lyrics?.lines[active], button = linesElement?.children[active] as HTMLElement | undefined;
+    if (previous && button && container && value.synced !== false && value.lines.length) {
+      const position = live().position;
+      let nearest = -1, distance = Infinity;
+      const text = previous.text.trim().replace(/\s+/g, ' ');
+      for (const [i, line] of value.lines.entries()) {
+        const delta = Math.abs(line.time - previous.time);
+        if (delta < distance && line.text.trim().replace(/\s+/g, ' ') === text) { nearest = i; distance = delta; }
+      }
+      const index = nearest >= 0 && distance < 5 ? nearest : locate(value.lines, position);
+      anchor = { value, index, offset: button.offsetTop - container.scrollTop };
+      held = { index, position };
+      active = index;
+    }
+    lyrics = value;
+  }
   // The active line follows the audio clock with its own timer. Small backwards
   // corrections of the clock (native reports arrive late) never move it back to the
   // previous line; only a real seek does.
   let lineTimer: ReturnType<typeof setTimeout> | undefined;
   function follow() {
     clearTimeout(lineTimer);
-    const current = lyrics; if (!current || current.synced === false) { active = -1; return; }
+    const current = lyrics; if (!current || current.synced === false) { active = -1; held = undefined; anchor = undefined; return; }
     const { position, rate, playing } = live(), found = locate(current.lines, position);
-    if (!(found < active && active >= 0 && current.lines[active]!.time - position < .9)) { if (found !== active && debugHooks.lyrics) debugHooks.lyrics(found < active ? 'line.back' : 'line', { from: active, to: found, position: Math.round(position * 1000), lineAt: found >= 0 ? Math.round(current.lines[found]!.time * 1000) : -1 }); active = found; }
+    if (held && (position < held.position - .15 || found >= held.index || Math.abs(position - held.position) > 5)) held = undefined;
+    if (!held && !(found < active && current.lines[active] && current.lines[active]!.time - position < .9)) { if (found !== active && debugHooks.lyrics) debugHooks.lyrics(found < active ? 'line.back' : 'line', { from: active, to: found, position: Math.round(position * 1000), lineAt: found >= 0 ? Math.round(current.lines[found]!.time * 1000) : -1 }); active = found; }
     const next = current.lines[active + 1];
     if (playing && next) lineTimer = setTimeout(follow, Math.max(30, (next.time - position) / Math.max(.25, rate) * 1000 + 20));
     align();
@@ -74,7 +101,7 @@
   /** Puts the word animations of the active line where the audio clock is. */
   function align() {
     const current = lyrics;
-    if (!current || !animations.length || animatedLine !== active) return;
+    if (!current?.lines[active] || !animations.length || animatedLine !== active) return;
     const { position, rate, playing } = live(), wanted = (position - current.lines[active]!.time) * 1000;
     for (const animation of animations) {
       // A sung word never "finishes" (endDelay), so play() cannot rewind it. While playing, only
@@ -85,7 +112,7 @@
       if (playing && animation.playState !== 'running') animation.play(); else if (!playing && animation.playState === 'running') animation.pause();
     }
   }
-  $effect(() => { void lyrics; untrack(() => { active = -1; follow(); }); return () => clearTimeout(lineTimer); });
+  $effect(() => { void lyrics; untrack(follow); return () => clearTimeout(lineTimer); });
   // Seeks, pause/resume and rate changes re-align immediately.
   $effect(() => { void ui.clock.playing; void ui.clock.position; untrack(follow); });
   $effect(() => {
@@ -96,26 +123,42 @@
     void tick().then(() => {
       if (cancelled) return;
       const spans = [...element.querySelectorAll<HTMLElement>(`[data-line="${index}"] .word`)];
-      animations = spans.map((span, i) => { const word = plan[i] ?? { at: 0, span: .2 }; const animation = span.animate([{ backgroundPosition: '100% 0' }, { backgroundPosition: '0% 0' }], { duration: word.span * 1000, delay: word.at * 1000, endDelay: 3_600_000, fill: 'both', easing: 'linear' }); animation.pause(); return animation; });
+      animations = spans.flatMap((span, i) => {
+        const word = plan[i]!;
+        const options = { duration: word.span * 1000, delay: word.at * 1000, endDelay: 3_600_000, fill: 'both' as const, easing: 'linear' };
+        // Opposite translations move the reveal edge while the sung glyphs stay over the original text.
+        const pair = [span.animate([{ transform: 'translateX(-100%)' }, { transform: 'none' }], options),
+          span.firstElementChild!.animate([{ transform: 'translateX(100%)' }, { transform: 'none' }], options)];
+        pair.forEach(animation => animation.pause());
+        return pair;
+      });
       animatedLine = index; align();
     });
     return () => { cancelled = true; animations.forEach(animation => animation.cancel()); animations = []; animatedLine = -1; };
   });
+  let scroll = $state.raw<ReturnType<typeof followLyricsScroll>>();
   $effect(() => {
-    const index = active;
-    if (index < 0 || !container || !linesElement) return;
-    const animations = parseFloat(document.documentElement.style.getPropertyValue('--motion-lyrics-duration')) > 0;
-    void tick().then(() => {
-      const element = linesElement?.querySelector<HTMLElement>(`[data-line="${index}"]`);
-      if (element && container) container.scrollTo({ top: element.offsetTop - container.clientHeight * .4, behavior: animations ? 'smooth' : 'instant' });
-    });
+    if (!container || !linesElement?.parentElement) return;
+    const controller = followLyricsScroll(container, linesElement.parentElement);
+    scroll = controller;
+    return () => { controller.destroy(); scroll = undefined; };
   });
+  $effect(() => {
+    const index = active, value = lyrics, box = container, controller = scroll;
+    const row = linesElement?.children[index] as HTMLElement | undefined;
+    if (!row || !box || !controller) return;
+    if (anchor?.value === value && anchor?.index === index) {
+      box.scrollTop = row.offsetTop - anchor.offset;
+      anchor = undefined;
+    } else controller.to(row);
+  });
+  $effect(() => { if (!motionEnabled) scroll?.finish(); });
 </script>
 <section class="lyrics" class:embedded data-motion-group="general" transition:motionTransition|global={{ group: 'general', enabled: !embedded }} aria-label={ui.t('lyrics.title')}>
   {#if !embedded}<header><button class="icon-button" aria-label={ui.t('nav.back')} onclick={() => ui.nav.back()}><Icon name="chevron-left" /></button><div><h1>{ui.t('lyrics.title')}</h1><p>{ui.track?.title} · {ui.track?.artist.name}</p></div><button class="icon-button" aria-label={ui.t('nav.close')} onclick={() => ui.nav.back()}><Icon name="close" size="s" /></button></header>{/if}
   {#if loading}<div class="loading" role="status" aria-live="polite"><span class="loading-line"></span><p>{ui.t('lyrics.loading')}</p></div>
   {:else if lyrics && lyrics.synced === false}<div class="lyrics-scroll plain" bind:this={container}><p class="hint">{ui.t('lyrics.plainHint')}</p><div class="plain-text">{#each lyrics.lines as line}<p class:gap={!line.text}>{line.text || '\u00a0'}</p>{/each}</div><p class="credit">{ui.t(lyrics.creditKey)}</p></div>
-  {:else if lyrics}<div class="lyrics-scroll" bind:this={container}><p class="hint">{ui.t('lyrics.seekHint')}</p><div class="lines" bind:this={linesElement}>{#each lyrics.lines as line, index}<button use:motion={{ group: 'lyrics', key: index === active, enabled: index === active }} class:active={index === active} class:past={index < active} class:karaoke={index === active && smooth} data-line={index} aria-current={index === active ? 'true' : undefined} onclick={() => ui.api.player.seek(line.time)}>{#if index === active && smooth}{#each parts(line) as word}<span class="word">{word.text}</span>{/each}{:else}{line.text}{/if}</button>{/each}</div><p class="credit">{ui.t(lyrics.creditKey)}</p></div>{:else}<EmptyState title={ui.t(failed ? 'lyrics.failed' : 'lyrics.empty')} description={ui.t(failed ? 'lyrics.failedSub' : 'lyrics.emptySub')} icon="lyrics" />{#if failed}<button class="retry text-action" onclick={() => retry++}>{ui.t('state.retry')}</button>{/if}{/if}
+  {:else if lyrics}<div class="lyrics-scroll" bind:this={container}><div class="lyrics-body"><p class="hint">{ui.t('lyrics.seekHint')}</p><div class="lines" bind:this={linesElement}>{#each lyrics.lines as line, index}<button data-motion-group="lyrics" class:active={index === active} class:near={Math.abs(index - active) === 1} class:animated={motionEnabled} data-line={index} aria-current={index === active ? 'true' : undefined} onclick={() => ui.api.player.seek(line.time)}>{#if index === active && smooth}{#each parts(line) as word}{word.text.match(/^\s*/)?.[0]}<span class="syllable">{word.text.trim()}<span class="word" aria-hidden="true"><span>{word.text.trim()}</span></span></span>{word.text.trim() ? word.text.match(/\s*$/)?.[0] : ''}{/each}{:else}{line.text}{/if}</button>{/each}</div><p class="credit">{ui.t(lyrics.creditKey)}</p></div></div>{:else}<EmptyState title={ui.t(failed ? 'lyrics.failed' : 'lyrics.empty')} description={ui.t(failed ? 'lyrics.failedSub' : 'lyrics.emptySub')} icon="lyrics" />{#if failed}<button class="retry text-action" onclick={() => retry++}>{ui.t('state.retry')}</button>{/if}{/if}
 {#if !embedded}<Dock nav={!sideNav} />{/if}</section>
 <style>
   .plain-text p { font-size: calc(var(--font-size-l) * var(--font-scale)); line-height: var(--line-height-body); color: var(--color-text); padding: 0 calc(var(--space-6) + var(--inset-left)); margin: 0 0 var(--space-1); }
@@ -128,17 +171,20 @@
   header > div { flex: 1; min-width: 0; text-align: center; }
   h1 { font-size: calc(var(--font-size-l) * var(--font-scale)); }
   header p { font-size: calc(var(--font-size-xs) * var(--font-scale)); color: var(--color-text-muted); margin-top: var(--space-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .lyrics-scroll { position: relative; flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-6) calc(var(--space-6) + var(--inset-right)) calc(var(--dock-height) + var(--lyrics-scroll-padding)) calc(var(--space-6) + var(--inset-left)); scroll-padding-block: var(--lyrics-scroll-padding); }
+  .lyrics-scroll { position: relative; flex: 1; overflow-y: auto; overscroll-behavior: contain; overflow-anchor: none; padding: var(--space-6) calc(var(--space-6) + var(--inset-right)) calc(var(--dock-height) + var(--lyrics-scroll-padding)) calc(var(--space-6) + var(--inset-left)); scroll-padding-block: var(--lyrics-scroll-padding); }
   .loading { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-4); padding-bottom: var(--dock-height); color: var(--color-text-muted); }
   .loading-line { width: var(--cover-card); height: var(--space-1); border-radius: var(--radius-full); background: var(--color-surface-3); }
   .retry { margin: 0 auto var(--dock-height); }
   .hint { color: var(--color-text-subtle); font-size: calc(var(--font-size-xs) * var(--font-scale)); margin-bottom: var(--space-8); text-align: start; }
+  .lyrics-body { position: relative; display: flow-root; }
   .lines { display: flex; flex-direction: column; gap: var(--space-5); }
-  .lines button { position: relative; min-height: var(--touch-size); font-size: calc(var(--font-size-lyrics) * var(--font-scale)); font-weight: var(--font-weight-bold); line-height: var(--lyrics-line-height); letter-spacing: var(--letter-spacing-heading); text-align: start; color: var(--color-text-subtle); }
-  .lines .past { color: var(--color-text-muted); }
-  .lines .active { color: var(--color-text); }
-  /* The sweep: the left (sung) half of a gradient twice as wide as the word slides in.
-     Its soft middle is the moving edge, so each word fills gradually, left to right. */
-  .lines .karaoke .word { color: transparent; background: linear-gradient(90deg, var(--color-text) 0 44%, var(--color-text-muted) 56% 100%) 100% 0 / 225% 100% no-repeat; -webkit-background-clip: text; background-clip: text; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .lines button { position: relative; min-height: var(--touch-size); font-size: calc(var(--font-size-lyrics) * var(--font-scale)); font-weight: var(--font-weight-bold); line-height: var(--lyrics-line-height); letter-spacing: var(--letter-spacing-heading); text-align: start; color: var(--color-text); opacity: var(--opacity-muted); transform-origin: left center; }
+  .lines button.animated { transition-property: transform, opacity, filter; transition-duration: var(--motion-lyrics-duration); transition-timing-function: var(--motion-lyrics-easing); }
+  .lines button.animated.near { filter: blur(var(--lyrics-near-blur, 0px)); }
+  .lines button.active { opacity: 1; }
+  .lines button.animated.active { transform: translateY(var(--lyrics-rise, 0px)) scale(var(--lyrics-scale, 1)); }
+  .syllable { position: relative; display: inline-block; color: var(--color-text-muted); }
+  .word { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .word > span { display: block; color: var(--color-text); }
   .credit { color: var(--color-text-subtle); font-size: calc(var(--font-size-xs) * var(--font-scale)); margin-top: var(--space-8); line-height: var(--line-height-body); }
 </style>

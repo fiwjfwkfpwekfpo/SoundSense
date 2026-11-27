@@ -60,6 +60,39 @@ function readMotion(node: Element, group: MotionGroup, effect?: string): Runtime
   };
 }
 
+export function lyricsMotion(node: Element): RuntimeMotion {
+  const selected = readMotion(node, 'lyrics');
+  return matchMedia('(prefers-reduced-motion: reduce)').matches ? { ...selected, duration: 0 } : selected;
+}
+
+/** Commit one scroll position per line. Only a compositor translation runs between lines. */
+export function followLyricsScroll(box: HTMLElement, content: HTMLElement) {
+  let animation: Animation | undefined;
+  function finish() { animation?.cancel(); animation = undefined; }
+  function offset() {
+    return animation && animation.playState !== 'finished' ? new DOMMatrixReadOnly(getComputedStyle(content).transform).m42 : 0;
+  }
+  function interrupt() {
+    if (!animation) return;
+    const visible = box.scrollTop - offset();
+    finish(); box.scrollTop = visible;
+  }
+  box.addEventListener('wheel', interrupt, { passive: true });
+  box.addEventListener('touchstart', interrupt, { passive: true });
+  return {
+    to(line: HTMLElement) {
+      const selected = lyricsMotion(content), visible = box.scrollTop - offset();
+      finish();
+      box.scrollTop = content.offsetTop + line.offsetTop - box.clientHeight * .4;
+      const distance = box.scrollTop - visible;
+      if (selected.duration && Math.abs(distance) > 1) {
+        animation = content.animate([{ transform: `translateY(${distance}px)` }, { transform: 'none' }], { duration: selected.duration, easing: selected.easing });
+      }
+    },
+    finish,
+    destroy() { finish(); box.removeEventListener('wheel', interrupt); box.removeEventListener('touchstart', interrupt); },
+  };
+}
 let lastMiniRect: DOMRect | undefined;
 let shell: { element: Element; rect: DOMRect } | undefined;
 /** The full-screen player fills the app shell; its rectangle is tracked off the critical path. */
