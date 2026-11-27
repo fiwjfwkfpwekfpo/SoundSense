@@ -46,6 +46,19 @@ describe('core player', () => {
     player.play(['a', 'b']); await flush(); clocks.b.ended = true; emit({ type: 'ended', slot: 'b' }); await flush();
     expect(player.getSnapshot().trackId).toBe('b'); expect(player.getSnapshot().playing).toBe(true); player.dispose();
   });
+  it('keeps the fading slot until a manual switch and an immediate seek have settled', async () => {
+    const { player, calls, clocks } = setup();
+    player.play(['a', 'b', 'c']); await flush();
+    player.next(); player.seek(35); await flush();
+    expect(calls).not.toContain('prepare:b:c');
+    await vi.advanceTimersByTimeAsync(310);
+    expect(clocks.a.position).toBeCloseTo(35, 0);
+    expect(calls.indexOf('prepare:b:c')).toBeGreaterThan(calls.lastIndexOf('stop:b'));
+    player.next(); await vi.advanceTimersByTimeAsync(310);
+    expect(player.getSnapshot().trackId).toBe('c');
+    expect(clocks.b.playing).toBe(true);
+    player.dispose();
+  });
   it('forgets a preloaded track whose slot failed and prepares it again', async () => {
     const { player, emit, calls } = setup();
     player.play(['a', 'b']); await flush(); expect(calls.filter(call => call === 'prepare:a:b')).toHaveLength(1);

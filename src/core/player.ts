@@ -144,6 +144,9 @@ export function createPlayer(library: LibraryApi, settings: SettingsApi, audio: 
     }
   }
   async function prepareNext() {
+    // change() still owns both slots until the outgoing fade stops. It preloads the
+    // latest queue once the switch finishes, including edits and seeks made meanwhile.
+    if (disposed || state.resolving) return;
     const index = nextIndex(), nextId = index === null ? undefined : state.queue[index]?.trackId, entryId = index === null ? '' : state.queue[index]!.id;
     // Waveform analysis never delays preparation of the next audio file.
     updateWaveforms();
