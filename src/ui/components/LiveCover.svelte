@@ -44,6 +44,6 @@
 </script>
 {#if url}<video class="live" class:shown bind:this={video} muted loop playsinline autoplay disablepictureinpicture aria-hidden="true" onplaying={() => shown = true} onerror={() => { shown = false; url = undefined; }}></video>{/if}
 <style>
-  .live { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; opacity: 0; transition: opacity .6s ease; pointer-events: none; }
+  .live { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; opacity: 0; transition: opacity var(--motion-cover-duration) var(--motion-cover-easing); pointer-events: none; }
   .live.shown { opacity: 1; }
 </style>

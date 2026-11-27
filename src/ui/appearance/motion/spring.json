@@ -4,32 +4,32 @@
   "groups": {
     "general": {
       "effect": "scale",
-      "duration": 300,
+      "duration": 210,
       "easing": "spring"
     },
     "player": {
       "effect": "expand",
-      "duration": 420,
+      "duration": 310,
       "easing": "spring"
     },
     "title": {
       "effect": "slide-up",
-      "duration": 320,
+      "duration": 205,
       "easing": "spring"
     },
     "cover": {
       "effect": "zoom",
-      "duration": 380,
+      "duration": 275,
       "easing": "spring"
     },
     "lyrics": {
       "effect": "scale",
-      "duration": 260,
+      "duration": 215,
       "easing": "spring"
     },
     "waveform": {
       "effect": "sweep",
-      "duration": 360,
+      "duration": 245,
       "easing": "spring",
       "progress": "smooth"
     }

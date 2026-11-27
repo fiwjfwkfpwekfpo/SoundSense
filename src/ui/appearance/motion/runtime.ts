@@ -4,7 +4,7 @@ import type { Easing, MotionGroup, MotionParameters } from '../schema';
 export interface MotionOptions { group: MotionGroup; key?: unknown; enabled?: boolean; effect?: string; duration?: number }
 interface RuntimeMotion { effect: string; duration: number; easing: string; progress: 'smooth' | 'stepped' }
 const curves = {
-  standard: [.2, .7, .2, 1], emphasized: [.16, 1, .3, 1], spring: [.34, 1.56, .64, 1],
+  standard: [.24, .64, .28, 1], emphasized: [.18, .82, .24, 1], spring: [.25, 1.18, .42, 1],
 } as const;
 
 export function easingToCss(easing: Easing): string {
@@ -43,7 +43,7 @@ function easingFunction(css: string): (t: number) => number {
   return t => t;
 }
 
-function readMotion(node: Element, group: MotionGroup, effect?: string): RuntimeMotion {
+export function readMotion(node: Element, group: MotionGroup, effect?: string): RuntimeMotion {
   // The loader writes resolved motion tokens inline. Reading them directly avoids
   // synchronous style/layout flushes while a new title and artwork are mounting.
   const root = document.documentElement;
@@ -153,15 +153,15 @@ export function flyToMini(node: HTMLElement) {
   const clone = node.cloneNode(true) as HTMLElement; clone.setAttribute('aria-hidden', 'true'); clone.className = 'listen-flight';
   clone.style.cssText = `position:fixed;left:${from.left}px;top:${from.top}px;width:${from.width}px;height:${from.height}px;z-index:100;pointer-events:none;background:var(--color-accent);color:var(--color-on-accent);border-radius:var(--radius-full);display:grid;place-items:center;transform-origin:0 0;`;
   document.body.append(clone);
-  const duration = readMotion(node, 'general').duration;
-  const animation = clone.animate([{ transform: 'none', opacity: 1 }, { transform: `translate(${to.left - from.left}px,${to.top - from.top}px) scale(${to.width / from.width},${to.height / from.height})`, opacity: 0 }], { duration, easing: 'cubic-bezier(.2,.7,.2,1)' });
+  const { duration, easing } = readMotion(node, 'general');
+  const animation = clone.animate([{ transform: 'none', opacity: 1 }, { transform: `translate(${to.left - from.left}px,${to.top - from.top}px) scale(${to.width / from.width},${to.height / from.height})`, opacity: 0 }], { duration, easing });
   void animation.finished.finally(() => clone.remove());
 }
 
 export function miniDrop(node: HTMLElement) {
   const selected = readMotion(node, 'player');
   if (!['shared', 'drop'].includes(selected.effect) || !selected.duration) return;
-  const animation = node.animate([{ transform: 'translateY(55px) scale(.25,.5)', borderRadius: 'var(--radius-full)', opacity: 0 }, { transform: 'translateY(-8px) scale(.97,1.06)', offset: .7, opacity: 1 }, { transform: 'none', opacity: 1 }], { duration: selected.duration, easing: 'cubic-bezier(.2,.7,.2,1)' });
+  const animation = node.animate([{ transform: 'translateY(55px) scale(.25,.5)', opacity: 0 }, { transform: 'translateY(-8px) scale(.97,1.06)', offset: .7, opacity: 1 }, { transform: 'none', opacity: 1 }], { duration: selected.duration, easing: selected.easing });
   return { destroy() { animation.cancel(); } };
 }
 
@@ -184,7 +184,7 @@ export function playPause(node: SVGPathElement, playing: boolean) {
   return { update(next: boolean) { cancel(); const target = next ? b : a; const from = current;
     const duration = readMotion(node, 'general').duration;
     if (!generalEffect('play-morph') || !duration) { current = target.map(point => [...point]); render(current); return; }
-    cancel = tween(duration, 'cubic-bezier(.34,1.56,.64,1)', value => { current = from.map((point, i) => point.map((n, j) => n + (target[i]![j]! - n) * value)); render(current); });
+    cancel = tween(duration, readMotion(node, 'general').easing, value => { current = from.map((point, i) => point.map((n, j) => n + (target[i]![j]! - n) * value)); render(current); });
   }, destroy() { cancel(); } };
 }
 
@@ -198,7 +198,7 @@ function effectCss(node: Element, group: MotionGroup, effect: string): (t: numbe
     const style = (node as HTMLElement).style, x = style?.getPropertyValue('--route-x').trim() || '50%', y = style?.getPropertyValue('--route-y').trim() || '100%';
     return t => `clip-path:circle(${Math.max(0, t) * 160}% at ${x} ${y});opacity:1`;
   }
-  if (effect === 'depth') return t => `transform:translateX(${(1 - t) * 16}%) scale(${.94 + .06 * t});opacity:${Math.max(0, t)}`;
+  if (effect === 'depth') return t => `transform:translateX(${(1 - t) * 4}%) scale(${.94 + .06 * t});opacity:${Math.max(0, t)}`;
   if (effect === 'crt') return t => `transform:scale(${t < .5 ? Math.max(.001, t * 2) : 1},${t < .5 ? .008 : .008 + (t - .5) * 1.984});opacity:${t > .01 ? 1 : 0}`;
   if (effect === 'drop') return t => `transform-origin:bottom;transform:translateY(${(1 - t) * 60}px) scale(${.25 + .75 * t},${.5 + .5 * t});opacity:${Math.max(0, t)}`;
   if (effect === 'stack') return t => `transform:translateX(${(1 - t) * 25}%) rotate(${(1 - t) * 8}deg) scale(${.92 + .08 * t});opacity:${Math.max(0, t)}`;
@@ -215,7 +215,7 @@ function effectCss(node: Element, group: MotionGroup, effect: string): (t: numbe
       const base = baseOf(); return t => `transform-origin:center;transform:translate3d(${dx * (1 - t)}px,${dy * (1 - t)}px,0) scale(${sx + (1 - sx) * t},${sy + (1 - sy) * t}) ${base};opacity:${.25 + .75 * t}`;
     }
   }
-  if (effect === 'slide-up' && group === 'player') { const base = baseOf(); return t => `transform:translate3d(0,${(1 - t) * 100}%,0) ${base};opacity:${.4 + .6 * t}`; }
+  if (effect === 'slide-up' && group === 'player') { const base = baseOf(); return t => `transform:translate3d(0,${(1 - t) * 32}%,0) ${base};opacity:${t}`; }
   if (effect === 'slide-up' || effect === 'slide') { const base = baseOf(); return t => `transform:translate3d(${group === 'cover' ? (1 - t) * 12 : 0}%,${group === 'cover' ? 0 : (1 - t) * 14}px,0) ${base};opacity:${Math.max(0, t)}`; }
   if (effect === 'scale') { const base = baseOf(); return t => `transform:scale(${.94 + .06 * t}) ${base};opacity:${Math.max(0, t)}`; }
   if (effect === 'zoom') { const base = baseOf(); return t => `transform:scale(${1.09 - .09 * t}) ${base};opacity:${Math.max(0, t)}`; }
@@ -245,19 +245,21 @@ function buildTransition(node: Element, options: MotionOptions, context: { direc
     node.removeAttribute('inert'); node.removeAttribute('data-motion-exiting');
   }
   const outgoing = context.direction === 'out' && (options.group === 'title' || options.group === 'cover' || node.hasAttribute('data-route'));
-  const position = outgoing ? 'position:absolute;top:0;left:0;width:100%;pointer-events:none;' : '';
+  node.toggleAttribute('data-motion-overlay', outgoing);
   if (selected.effect === 'shared' && options.group === 'player' && node instanceof HTMLElement) {
     const cleanup = sharedElements(node, context.direction);
     return { duration: selected.duration, easing: easingFunction(selected.easing), tick(t) { cleanup.update(t); }, css: t => `opacity:${.3 + .7 * t}` };
   }
-  if (['split-flap', 'decipher'].includes(selected.effect)) {
+  if (selected.effect === 'split-flap') {
+    return { duration: selected.duration, easing: easingFunction(selected.easing), css: t => `transform:perspective(400px) rotateX(${(1 - t) * 48}deg);opacity:${t}` };
+  }
+  if (selected.effect === 'decipher') {
     const text = node.querySelector<HTMLElement>('[data-title-text]');
     const canonical = text?.dataset.title ?? text?.textContent ?? '';
     return { duration: selected.duration, easing: t => t, tick(t) {
       if (!text) return;
-      text.textContent = [...canonical].map((letter, index) => t >= 1 || t > (index + 1) / Math.max(1, canonical.length) ? letter : selected.effect === 'split-flap' ? 'АБВГДЕЖЗ0123456789'[(index + Math.floor(t * 38)) % 17] : '▓▒░#%'[(index + Math.floor(t * 32)) % 5]).join('');
-      text.style.transform = selected.effect === 'split-flap' && t < 1 ? `perspective(250px) rotateX(${(1 - (t * 12 % 1)) * 35}deg)` : '';
-    }, css: t => position + `opacity:${Math.min(1, t * 4)}` };
+      text.textContent = [...canonical].map((letter, index) => t >= 1 || t > (index + 1) / Math.max(1, canonical.length) ? letter : '▓▒░#%'[(index + Math.floor(t * 32)) % 5]).join('');
+    }, css: t => `opacity:${Math.min(1, t * 4)}` };
   }
   if (selected.effect === 'typewriter' && node instanceof HTMLElement) {
     const content = node.querySelector<HTMLElement>(':scope > [data-motion-content]');
@@ -273,11 +275,11 @@ function buildTransition(node: Element, options: MotionOptions, context: { direc
           node.style.transform = `scaleX(${Math.max(.00001, progress)})`;
           content.style.transform = `scaleX(${1 / Math.max(.00001, progress)})`;
           if (t >= 1) { node.style.transform = before.transform; node.style.opacity = before.opacity; node.style.overflow = before.overflow; node.style.transformOrigin = before.origin; content.style.transform = before.innerTransform; content.style.transformOrigin = before.innerOrigin; }
-        }, css: () => position };
+        }, css: () => '' };
     }
   }
   const css = effectCss(node, options.group, selected.effect);
-  return { duration: selected.duration, easing: easingFunction(selected.easing), css: t => position + css(t) };
+  return { duration: selected.duration, easing: easingFunction(selected.easing), css };
 }
 
 function tween(duration: number, easing: string, update: (value: number) => void, finish: () => void = () => {}): () => void {
@@ -352,6 +354,26 @@ export function motion(node: HTMLElement, initial: MotionOptions) {
       options = next; node.dataset.motionGroup = next.group;
       if (changed) { if (next.enabled === false) cancel(); else play(); }
     }, destroy() { destroyed = true; cancel(); },
+  };
+}
+
+export function waveformChange(node: HTMLElement, initial: { key: string; motion: MotionParameters }) {
+  let previous = initial.key, animation: Animation | undefined;
+  const progress = (value: string) => { if (node.parentElement) node.parentElement.dataset.morphProgress = value; };
+  return {
+    update({ key, motion }: typeof initial) {
+      if (key === previous && motion.duration && motion.effect !== 'none') return;
+      animation?.cancel(); animation = undefined; progress('1.000');
+      if (!key) return;
+      const changed = !!previous && previous !== key; previous = key;
+      if (!changed || !motion.duration || motion.effect === 'none') return;
+      const start = motion.effect === 'grow' ? 'scaleY(.25)' : motion.effect === 'sweep' ? 'scaleX(.85)' : 'scaleY(.82)';
+      const active = animation = node.animate([{ transform: start, opacity: 0 }, { transform: 'none', opacity: 1 }],
+        { duration: motion.duration, easing: easingToCss(motion.easing) });
+      progress('0.000');
+      active.onfinish = () => { if (active === animation) progress('1.000'); };
+    },
+    destroy() { animation?.cancel(); },
   };
 }
 

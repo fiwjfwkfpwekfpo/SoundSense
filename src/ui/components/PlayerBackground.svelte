@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, tick, untrack } from 'svelte';
   import { useModel } from '../context.svelte';
+  import { easingToCss } from '../appearance/motion/runtime';
   import { colorVariables } from '../appearance/loader';
   import type { Artwork } from '../../core/types';
   import Cover from './Cover.svelte';
@@ -22,14 +23,15 @@
     if ((!changedTrack && !changedPalette) || (!changedTrack && change?.id === activeTransitionId)) return;
     const run = ++generation; animation?.cancel(); animation = undefined; activeTransitionId = -1;
     const from = untrack(() => changedTrack && change ? ui.api.library.getTrack(change.from) : palette ? ui.track : undefined);
-    const duration = untrack(() => ui.appearance.groups.general.duration ? changedTrack ? change!.duration : palette?.duration ?? 0 : 0);
+    const group = untrack(() => ui.appearance.groups.general);
+    const duration = Math.min(group.duration, changedTrack ? group.duration : palette?.duration ?? 0);
     if (!from || !duration) { outgoing = undefined; return; }
     const previousColors = palette && (!changedTrack || palette.transitionId === change?.id) ? palette.from : untrack(() => ui.appearance.colors);
     outgoing = { artwork: from.artwork, style: Object.entries(colorVariables(previousColors)).map(([key, value]) => `${key}:${value}`).join(';') };
     activeTransitionId = changedTrack ? change!.id : -1;
     void tick().then(() => {
       if (disposed || run !== generation || !oldLayer) return;
-      const fade = oldLayer.animate([{ opacity: 1 }, { opacity: 0 }], { duration, easing: 'linear', fill: 'forwards' }); animation = fade;
+      const fade = oldLayer.animate([{ opacity: 1 }, { opacity: 0 }], { duration, easing: easingToCss(group.easing), fill: 'forwards' }); animation = fade;
       void fade.finished.then(async () => { if (!disposed && run === generation) { outgoing = undefined; activeTransitionId = -1; await tick(); if (!disposed && run === generation) { fade.cancel(); animation = undefined; } } }).catch(() => {});
     });
   });

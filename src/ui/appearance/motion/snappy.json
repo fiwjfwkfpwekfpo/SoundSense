@@ -4,33 +4,33 @@
   "groups": {
     "general": {
       "effect": "fade",
-      "duration": 110,
-      "easing": "standard"
+      "duration": 95,
+      "easing": "emphasized"
     },
     "player": {
       "effect": "slide-up",
-      "duration": 170,
+      "duration": 150,
       "easing": "emphasized"
     },
     "title": {
       "effect": "fade",
-      "duration": 120,
-      "easing": "standard"
+      "duration": 105,
+      "easing": "emphasized"
     },
     "cover": {
       "effect": "slide",
-      "duration": 160,
-      "easing": "standard"
+      "duration": 145,
+      "easing": "emphasized"
     },
     "lyrics": {
       "effect": "fade",
-      "duration": 120,
-      "easing": "standard"
+      "duration": 110,
+      "easing": "emphasized"
     },
     "waveform": {
       "effect": "grow",
-      "duration": 180,
-      "easing": "standard",
+      "duration": 135,
+      "easing": "emphasized",
       "progress": "smooth"
     }
   }

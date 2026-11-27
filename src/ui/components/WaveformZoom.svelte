@@ -3,6 +3,7 @@
   import { resampleSamples } from '../../core/waveform';
   import { formatTime } from '../../core/format';
   import { useModel } from '../context.svelte';
+  import { waveformChange } from '../appearance/motion/runtime';
   import { debugHooks } from '../../core/debug-hooks';
   /**
    * SoundCloud-style waveform: the playhead stays in the centre and a zoomed
@@ -13,7 +14,7 @@
   } = $props();
   const ui = useModel();
   const BARS_PER_SECOND = 1, MAX_BARS = 1600, MAX_CANVAS = 16000, BASELINE = .64;
-  let root: HTMLDivElement, bars: HTMLDivElement;
+  let root: HTMLDivElement;
   let width = $state(0), height = $state(0), pitch = $state(4), barSize = $state(2), revision = $state(0);
   let dragging = $state(false), preview: number | null = null, timeText = $state('0:00');
   let count = $derived(Math.max(1, Math.min(MAX_BARS, Math.max(Math.round(duration * BARS_PER_SECOND), Math.ceil(width / pitch * 1.5)))));
@@ -65,6 +66,11 @@
     if (!strip || !speed()) return;
     const run = MARGIN_BARS * pitch / speed(), start = stripX(strip.seconds), end = start - MARGIN_BARS * pitch;
     const frames = [{ transform: `translate3d(${start}px,0,0)` }, { transform: `translate3d(${end}px,0,0)` }];
+    if (ui.appearance.groups.waveform.progress === 'stepped') {
+      const at = Math.round(stripX(seconds) / pitch) * pitch;
+      for (const canvas of [restCanvas, playedCanvas]) canvas.style.transform = `translateX(${at}px)`;
+      return;
+    }
     for (const canvas of [restCanvas, playedCanvas]) { const motion = canvas.animate(frames, { duration: run * 1000, fill: 'both', easing: 'linear' }); motion.pause(); motions.push(motion); }
     motions[0]!.onfinish = () => { if (playing) build(current()); };
     align(seconds, true);
@@ -72,7 +78,12 @@
   function current() { const clock = ui.api.player.livePosition?.(); return Math.max(0, Math.min(duration, clock ? clock.position : position)); }
   /** Puts the slide where the audio clock is; corrects only differences you could see (> ~½ px). */
   function align(seconds: number, force = false) {
-    if (!strip || !motions.length) { build(seconds); return; }
+    if (!strip) { build(seconds); return; }
+    if (!motions.length) {
+      if (seconds < strip.seconds || (seconds - strip.seconds) * speed() >= MARGIN_BARS * pitch) build(seconds);
+      else animate(seconds);
+      return;
+    }
     const offset = (seconds - strip.seconds) * 1000, run = MARGIN_BARS * pitch / speed() * 1000;
     if (offset < 0 || offset >= run) { if (!force && playing) debugHooks.wave?.('rebuild', { reason: offset < 0 ? 'behind' : 'ahead', offsetMs: Math.round(offset), runMs: Math.round(run) }); build(seconds); return; }
     const clock = ui.api.player.livePosition?.(), rate = Math.max(.25, clock?.rate ?? 1);
@@ -92,7 +103,7 @@
     align(preview, true);
     const center = width / 2, actual = Math.max(-1, Math.min(width + 1, center + (Math.max(0, Math.min(duration, position)) - preview) * speed()));
     const from = Math.min(center, actual), to = Math.max(center, actual);
-    if (to - from > .5 && ghostClip) { ghostClip.style.display = ''; ghostClip.style.left = `${from}px`; ghostClip.style.width = `${to - from}px`; ghostCanvas.style.transform = `translate3d(${stripX(preview) - from}px,0,0)`; }
+    if (to - from > .5 && ghostClip) { ghostClip.style.display = ''; ghostClip.style.clipPath = `inset(0 ${width - to}px 0 ${from}px)`; ghostCanvas.style.transform = `translate3d(${stripX(preview)}px,0,0)`; }
     else ghostClip?.style.setProperty('display', 'none');
     const text = formatTime(preview); if (text !== timeText) timeText = text;
   }
@@ -111,22 +122,6 @@
     });
   });
   onMount(() => () => { motions.forEach(motion => motion.cancel()); cancelAnimationFrame(frame); });
-
-  // A new track grows out of the baseline; crossfades use the crossfade length.
-  // Not an effect cleanup: progressive sample updates must not cancel a running grow.
-  let lastKey = '', grow: Animation | undefined;
-  onMount(() => () => grow?.cancel());
-  $effect(() => {
-    const key = waveKey, ready = samples.length > 0; if (!ready || key === lastKey) return;
-    const first = !lastKey; lastKey = key; if (first || !bars?.animate) return;
-    const group = untrack(() => ui.appearance.groups.waveform), transition = untrack(() => ui.player?.transition);
-    const ms = transition?.kind === 'crossfade' ? transition.duration : group.duration;
-    if (group.effect === 'none' || !ms) return;
-    grow?.cancel();
-    const animation = grow = bars.animate([{ transform: 'scaleY(0)', opacity: 0 }, { transform: 'scaleY(1)', opacity: 1 }], { duration: Math.min(ms, 3000), easing: 'cubic-bezier(.2,.8,.2,1)' });
-    root.dataset.morphProgress = '0.000'; const done = () => { if (root) root.dataset.morphProgress = '1.000'; };
-    animation.onfinish = done; animation.oncancel = done;
-  });
 
   onMount(() => {
     const tokens = () => { const style = getComputedStyle(document.documentElement); barSize = parseFloat(style.getPropertyValue('--wave-bar')) || 2; pitch = barSize + (parseFloat(style.getPropertyValue('--wave-gap')) || 2); paint = undefined; revision++; };
@@ -170,7 +165,7 @@
 </script>
 <div bind:this={root} class="wave-zoom" class:dragging role="slider" tabindex="0" aria-label={ui.t('player.seek')} aria-valuemin="0" aria-valuemax={Math.round(duration)} aria-valuenow={Math.round(position)} aria-valuetext={`${formatTime(position)} / ${formatTime(duration)}`}
   data-testid="waveform" data-morph-progress="1.000" data-wave-samples={samples.length} onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={cancel} onkeydown={key}>
-  <div bind:this={bars} class="bars" aria-hidden="true"><canvas bind:this={restCanvas}></canvas><div class="clip" bind:this={playedClip}><canvas bind:this={playedCanvas}></canvas></div><div class="clip ghost" style="display:none" bind:this={ghostClip}><canvas bind:this={ghostCanvas}></canvas></div></div>
+  <div class="bars" use:waveformChange={{ key: waveKey, motion: ui.appearance.groups.waveform }} aria-hidden="true"><canvas bind:this={restCanvas}></canvas><div class="clip" bind:this={playedClip}><canvas bind:this={playedCanvas}></canvas></div><div class="clip ghost" style="display:none" bind:this={ghostClip}><canvas bind:this={ghostCanvas}></canvas></div></div>
   <div class="time" aria-hidden="true"><span>{timeText}</span><i></i><span>{formatTime(duration)}</span></div>
 </div>
 <style>
@@ -179,7 +174,7 @@
   .bars { position: absolute; inset: 0; transform-origin: 50% 64%; pointer-events: none; }
   canvas { position: absolute; left: 0; top: 0; height: 100%; will-change: transform; }
   .clip { position: absolute; left: 0; top: 0; bottom: 0; overflow: hidden; }
-  .ghost { opacity: var(--opacity-wave-ghost, .45); }
+  .ghost { width: 100%; opacity: var(--opacity-wave-ghost, .45); }
   .time { pointer-events: none; position: absolute; top: 64%; left: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); background: var(--color-bg); border-radius: var(--radius-s); font-size: calc(var(--font-size-sm) * var(--font-scale)); font-variant-numeric: tabular-nums; font-weight: var(--font-weight-semibold); }
   .time span:last-child { color: var(--color-text-muted); }
   .time i { width: var(--border-width); height: var(--space-3); background: var(--color-text-subtle); }
