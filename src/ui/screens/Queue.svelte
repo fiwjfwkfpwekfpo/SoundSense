@@ -15,15 +15,23 @@
   let queue = $derived(ui.player?.queue);
   let currentIndex = $derived(ui.player?.currentIndex ?? -1);
   let upcoming = $derived(queue?.slice(currentIndex + 1) ?? []);
+  function reorderAtPointer(event: PointerEvent, dropping = false) {
+    if (!dragging) return;
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-queue-index]');
+    if (!target || target.dataset.queueId === dragging) return;
+    const to = Number(target.dataset.queueIndex), from = queue?.findIndex(item => item.id === dragging) ?? -1;
+    if (from < 0 || from === to) return;
+    // Preview after crossing the row centre. On release, use the row under the pointer
+    // even if the opening animation or autoscroll moved its centre during the drag.
+    if (!dropping) {
+      const rect = target.getBoundingClientRect(), middle = rect.top + rect.height / 2;
+      if (to > from ? event.clientY < middle : event.clientY > middle) return;
+    }
+    ui.api.player.move(dragging, to);
+  }
   function dragMove(event: PointerEvent) {
     if (!dragging) return;
-    // Hysteresis: swap only once the finger passes the middle of the neighbouring row,
-    // otherwise the list oscillates while rows re-render under the pointer.
-    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-queue-index]');
-    if (target && target.dataset.queueId !== dragging) {
-      const to = Number(target.dataset.queueIndex), from = queue?.findIndex(item => item.id === dragging) ?? -1, rect = target.getBoundingClientRect(), middle = rect.top + rect.height / 2;
-      if (from >= 0 && to !== from && (to > from ? event.clientY >= middle : event.clientY <= middle)) ui.api.player.move(dragging, to);
-    }
+    reorderAtPointer(event);
     if (scroller) {
       const bounds = scroller.getBoundingClientRect();
       if (event.clientY < bounds.top + 100) scroller.scrollTop -= 16;
@@ -32,7 +40,8 @@
   }
   function swipeDown(event: PointerEvent, id: string) { if (!(event.target as Element).closest('.grip')) swipeStart = { x: event.clientX, y: event.clientY, id }; }
   function swipeMove(event: PointerEvent) { if (!swipeStart || dragging) return; if (Math.abs(event.clientY - swipeStart.y) < 35) { swipeId = swipeStart.id; swipeX = Math.min(0, event.clientX - swipeStart.x); } }
-  function finish() {
+  function finish(event: PointerEvent) {
+    reorderAtPointer(event, true);
     if (swipeStart && swipeX < -80) { ui.api.player.remove(swipeStart.id); }
     swipeStart = null; swipeId = null; swipeX = 0; dragging = null;
   }
